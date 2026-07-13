@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import io.github.xiaocan.model.dto.GrabConfigDTO;
 import io.github.xiaocan.model.dto.GrabLoginStateDTO;
 import io.github.xiaocan.model.entity.GrabConfigEntity;
+import io.github.xiaocan.model.vo.GrabCardVO;
 import io.github.xiaocan.model.vo.GrabConfigVO;
 import io.github.xiaocan.model.vo.GrabHistoryVO;
 import io.github.xiaocan.model.vo.GrabLoginStateVO;
@@ -62,4 +63,9 @@ public interface GrabService extends IService<GrabConfigEntity> {
      * 抢单历史记录查询
      */
     List<GrabHistoryVO> listHistoryByUserId(Integer limit);
+
+    /**
+     * 卡券查询：按登录态查该账号的卡券列表
+     */
+    List<GrabCardVO> listCards(Integer loginStateId, Integer number, Integer offset, Integer status);
 }

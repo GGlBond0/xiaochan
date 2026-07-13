@@ -1,5 +1,6 @@
 package io.github.xiaocan.service.impl;
 
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import io.github.xiaocan.config.BusinessException;
@@ -15,6 +16,7 @@ import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.dto.GrabConfigDTO;
 import io.github.xiaocan.model.dto.GrabLoginStateDTO;
+import io.github.xiaocan.model.vo.GrabCardVO;
 import io.github.xiaocan.model.vo.GrabConfigVO;
 import io.github.xiaocan.model.vo.GrabHistoryVO;
 import io.github.xiaocan.model.vo.GrabLoginStateVO;
@@ -411,6 +413,52 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
         return list.stream().map(e -> {
             GrabHistoryVO vo = new GrabHistoryVO();
             BeanUtils.copyProperties(e, vo);
+            return vo;
+        }).toList();
+    }
+
+    @Override
+    public List<GrabCardVO> listCards(Integer loginStateId, Integer number, Integer offset, Integer status) {
+        UserEntity user = userService.getByCurrentRequest();
+        GrabLoginStateEntity loginState = loginStateId == null ? null
+                : grabLoginStateMapper.selectById(loginStateId);
+        if (loginState == null || !loginState.getUserId().equals(user.getId())) {
+            throw new BusinessException("登录态不存在或无权使用");
+        }
+        if (loginState.getExpireAt() != null && loginState.getExpireAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException("该登录态 JWT 已过期，请更新");
+        }
+        GrabAuth auth = GrabAuth.from(loginState);
+        if (auth == null || !auth.isComplete()) {
+            throw new BusinessException("登录态不完整");
+        }
+        int num = number == null || number <= 0 ? 15 : Math.min(number, 50);
+        int off = offset == null || offset < 0 ? 0 : offset;
+        int st = status == null ? 0 : status;
+        JSONObject resp = xiaochanHttp.getUserCardList(auth, num, off, st);
+        JSONObject statusObj = resp.getJSONObject("status");
+        if (statusObj == null || statusObj.getIntValue("code") != 0) {
+            throw new BusinessException("查询卡券失败:" + (statusObj == null ? "无响应" : statusObj.getString("msg")));
+        }
+        JSONArray list = resp.getJSONArray("list");
+        if (list == null) return List.of();
+        java.time.ZoneId zone = ZoneId.systemDefault();
+        return list.stream().map(o -> {
+            JSONObject item = (JSONObject) o;
+            JSONObject card = item.getJSONObject("card");
+            GrabCardVO vo = new GrabCardVO();
+            vo.setId(item.getLong("id"));
+            if (card != null) {
+                vo.setCardId(card.getInteger("id"));
+                vo.setCardType(card.getInteger("card_type"));
+                vo.setName(card.getString("name"));
+                vo.setDesc(card.getString("desc"));
+                vo.setPic(card.getString("pic"));
+            }
+            Long exp = item.getLong("expire_time");
+            Long cre = item.getLong("created_at");
+            if (exp != null) vo.setExpireTime(java.time.Instant.ofEpochSecond(exp).atZone(zone).toLocalDateTime());
+            if (cre != null) vo.setCreatedAt(java.time.Instant.ofEpochSecond(cre).atZone(zone).toLocalDateTime());
             return vo;
         }).toList();
     }

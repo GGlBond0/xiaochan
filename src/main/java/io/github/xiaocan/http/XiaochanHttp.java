@@ -164,6 +164,35 @@ public class XiaochanHttp {
     private static final String GRAB_METHOD_NAME = "SilkwormService.GrabPromotionQuota";
 
     /**
+     * 卡券查询接口服务名/方法名
+     */
+    private static final String CARD_SERVER_NAME = "SilkwormCard";
+    private static final String CARD_METHOD_NAME = "SilkwormCardService.GetUserCardList";
+
+    /**
+     * 卡券查询：调用 SilkwormCardService.GetUserCardList。
+     * 复用 X-Ashe 加密 + 登录态 + 代理（与抢单同模式）。
+     *
+     * @param auth   登录态
+     * @param number 每页数量
+     * @param offset 偏移
+     * @param status 卡券状态（0=全部）
+     * @return 小蚕原始响应 JSON（含 status.code / list[]）
+     */
+    public JSONObject getUserCardList(GrabAuth auth, int number, int offset, int status) {
+        Integer silkId = auth.getSilkId() == null ? 0 : auth.getSilkId();
+        Map<String, Object> body = new HashMap<>();
+        body.put("number", number);
+        body.put("offset", offset);
+        body.put("silk_id", silkId);
+        body.put("status", status);
+        // 卡券查询无 cityCode，传 null
+        String resBody = postWithResAuth(BASE_URL, JSONObject.toJSONString(body), null,
+                CARD_SERVER_NAME, CARD_METHOD_NAME, auth);
+        return JSONObject.parseObject(resBody);
+    }
+
+    /**
      * 抢单：调用 SilkwormService.GrabPromotionQuota。
      * 复用 X-Ashe 加密算法与代理机制；header 带 Android 登录态。
      * silk_id 取自 auth（登录态记录，X-Teemo）。

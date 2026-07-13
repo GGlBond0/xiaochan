@@ -4,6 +4,7 @@ import io.github.xiaocan.model.BaseResult;
 import io.github.xiaocan.model.dto.GrabConfigDTO;
 import io.github.xiaocan.model.dto.GrabLoginStateDTO;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
+import io.github.xiaocan.model.vo.GrabCardVO;
 import io.github.xiaocan.model.vo.GrabConfigVO;
 import io.github.xiaocan.model.vo.GrabHistoryVO;
 import io.github.xiaocan.model.vo.GrabLoginStateVO;
@@ -103,5 +104,17 @@ public class GrabController {
     @GetMapping("/history/list")
     public BaseResult<List<GrabHistoryVO>> listHistory(@RequestParam(required = false, defaultValue = "50") Integer limit) {
         return BaseResult.ok(grabService.listHistoryByUserId(limit));
+    }
+
+    /**
+     * 卡券查询：按登录态查该账号的卡券列表
+     */
+    @GetMapping("/card/list")
+    public BaseResult<List<GrabCardVO>> listCards(
+            @RequestParam Integer loginStateId,
+            @RequestParam(required = false, defaultValue = "15") Integer number,
+            @RequestParam(required = false, defaultValue = "0") Integer offset,
+            @RequestParam(required = false, defaultValue = "0") Integer status) {
+        return BaseResult.ok(grabService.listCards(loginStateId, number, offset, status));
     }
 }
