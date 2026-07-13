@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-07-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~143 | Active |
+| `journal-1.md` | ~176 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-07-14 | bootstrap-guidelines:填充前后端开发规范 | `3f69b94` | `main` |
 | 4 | 2026-07-14 | 服务器资源精简:停用openclaw/new-api/rustdesk | `d3dcbd5` | `main` |
 | 3 | 2026-07-14 | distance-3km 前端部署+后端代理修复+MySQL连接修复 | `d3dcbd5`, `6fc2ec0` | `main` |
 | 2 | 2026-07-14 | distance-3km 后端生产部署 + Trellis 收尾 | `cad62c8`, `02f615b` | `main` |

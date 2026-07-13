@@ -141,3 +141,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: bootstrap-guidelines:填充前后端开发规范
+
+**Date**: 2026-07-14
+**Task**: bootstrap-guidelines:填充前后端开发规范
+**Branch**: `main`
+
+### Summary
+
+推进 Trellis 自动创建的 bootstrap-guidelines 任务：派两个 Explore 子代理扫描后端(Spring Boot3+MyBatis-Plus)和前端(Vue3+TS)真实代码约定，据实填写 .trellis/spec/backend 5个文件 + frontend 6个文件。遵循'记录现状含技术债而非理想'原则，记录既有不一致(Monitory拼写/monitorConfigDTO小写/LocationDTO误带ORM注解/前端大量any/无ESLint测试等)。更新 index 状态为 Filled、prd 三项 checkbox 勾选。归档任务。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3f69b94` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
