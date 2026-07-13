@@ -60,4 +60,12 @@ public class GrabHistoryEntity {
      * 触发类型：MANUAL/CRON/ONESHOT
      */
     private String triggerType;
+    /**
+     * 商家名称（抢单时快照）
+     */
+    private String storeName;
+    /**
+     * 优惠明细，如 满10返5（抢单时快照）
+     */
+    private String promoDetail;
 }

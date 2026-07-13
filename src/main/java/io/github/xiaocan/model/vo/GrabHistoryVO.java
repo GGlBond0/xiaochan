@@ -20,4 +20,6 @@ public class GrabHistoryVO {
     private Long promotionOrderId;
     private Integer attempt;
     private String triggerType;
+    private String storeName;
+    private String promoDetail;
 }

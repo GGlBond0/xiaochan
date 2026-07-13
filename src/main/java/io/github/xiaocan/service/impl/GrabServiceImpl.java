@@ -13,6 +13,7 @@ import io.github.xiaocan.model.entity.GrabHistoryEntity;
 import io.github.xiaocan.model.entity.GrabLoginStateEntity;
 import io.github.xiaocan.model.entity.LocationEntity;
 import io.github.xiaocan.model.entity.UserEntity;
+import io.github.xiaocan.model.StoreInfo;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.dto.GrabConfigDTO;
 import io.github.xiaocan.model.dto.GrabLoginStateDTO;
@@ -317,7 +318,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setSuccess(false);
             result.setCode(-1);
             result.setMsg("该配置未绑定有效登录态（或已过期）");
-            saveHistory(config, user.getId(), false, -1, "未绑定有效登录态", null, 1, triggerType);
+            saveHistory(config, user.getId(), false, -1, "未绑定有效登录态", null, 1, triggerType, null, null);
             return result;
         }
         // JWT 过期校验
@@ -325,7 +326,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setSuccess(false);
             result.setCode(-1);
             result.setMsg("登录态 JWT 已过期");
-            saveHistory(config, user.getId(), false, -1, "登录态JWT已过期", null, 1, triggerType);
+            saveHistory(config, user.getId(), false, -1, "登录态JWT已过期", null, 1, triggerType, null, null);
             return result;
         }
         // 位置
@@ -335,13 +336,24 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setSuccess(false);
             result.setCode(-1);
             result.setMsg("位置信息不存在");
-            saveHistory(config, user.getId(), false, -1, "位置信息不存在", null, 1, triggerType);
+            saveHistory(config, user.getId(), false, -1, "位置信息不存在", null, 1, triggerType, null, null);
             return result;
         }
         LocationEntity l = loc.get();
         lat = l.getLatitude();
         lng = l.getLongitude();
         cityCode = l.getCityCode();
+
+        // 活动信息快照（商家名 + 优惠明细）。detail 不随重试变化，循环外只查一次；
+        // 查询失败不影响抢单主流程，留空即可。
+        StoreInfo promoSnapshot = null;
+        try {
+            promoSnapshot = xiaochanHttp.getStorePromotionDetail(config.getPromotionId());
+        } catch (Exception e) {
+            log.warn("查询活动详情失败 promotionId={}: {}", config.getPromotionId(), e.getMessage());
+        }
+        String storeName = promoSnapshot == null ? null : promoSnapshot.getName();
+        String promoDetail = promoSnapshot == null ? null : buildPromoDetail(promoSnapshot);
 
         boolean retry = Boolean.TRUE.equals(config.getEnableRetry());
         int maxRetry = retry ? Math.max(1, config.getMaxRetry() == null ? 1 : config.getMaxRetry()) : 1;
@@ -354,7 +366,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                 resp = xiaochanHttp.grabPromotionQuota(auth, cityCode, lat, lng, config.getPromotionId());
             } catch (Exception e) {
                 log.error("抢单请求异常 configId={}", config.getId(), e);
-                saveHistory(config, user.getId(), false, -1, "请求异常:" + e.getMessage(), null, attempt, triggerType);
+                saveHistory(config, user.getId(), false, -1, "请求异常:" + e.getMessage(), null, attempt, triggerType, storeName, promoDetail);
                 finalResult = fail(-1, "请求异常:" + e.getMessage());
                 if (attempt < maxRetry && retry) sleep(interval); else break;
                 continue;
@@ -364,7 +376,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             String msg = status != null ? status.getString("msg") : "";
             Long orderId = resp.getLong("promotion_order_id");
             boolean success = (code == 0 && orderId != null);
-            saveHistory(config, user.getId(), success, code, msg, orderId, attempt, triggerType);
+            saveHistory(config, user.getId(), success, code, msg, orderId, attempt, triggerType, storeName, promoDetail);
 
             finalResult = new GrabResultVO();
             finalResult.setCode(code);
@@ -464,7 +476,8 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     }
 
     private void saveHistory(GrabConfigEntity config, Integer userId, boolean success, int code,
-                             String msg, Long orderId, int attempt, String triggerType) {
+                             String msg, Long orderId, int attempt, String triggerType,
+                             String storeName, String promoDetail) {
         GrabHistoryEntity h = new GrabHistoryEntity();
         h.setUserId(userId);
         h.setGrabConfigId(config.getId());
@@ -477,7 +490,19 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
         h.setPromotionOrderId(orderId);
         h.setAttempt(attempt);
         h.setTriggerType(triggerType);
+        h.setStoreName(storeName);
+        h.setPromoDetail(promoDetail);
         grabHistoryMapper.insert(h);
+    }
+
+    /** 优惠明细：满X返Y；金额为空时返回 null。 */
+    private String buildPromoDetail(StoreInfo s) {
+        if (s == null) return null;
+        if (s.getPrice() != null && s.getRebatePrice() != null) {
+            return "满" + s.getPrice().stripTrailingZeros().toPlainString()
+                    + "返" + s.getRebatePrice().stripTrailingZeros().toPlainString();
+        }
+        return null;
     }
 
     private void push(UserEntity user, String summary, String body) {

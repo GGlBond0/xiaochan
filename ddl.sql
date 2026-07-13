@@ -173,6 +173,8 @@ CREATE TABLE `grab_history` (
     `promotion_order_id` BIGINT NULL DEFAULT NULL COMMENT '抢到的订单id',
     `attempt`            INT NOT NULL DEFAULT 1 COMMENT '第几次重试',
     `trigger_type`       VARCHAR(16) NULL DEFAULT NULL COMMENT 'MANUAL/CRON/ONESHOT',
+    `store_name`         VARCHAR(128) NULL DEFAULT NULL COMMENT '商家名称(抢单时快照)',
+    `promo_detail`       VARCHAR(255) NULL DEFAULT NULL COMMENT '优惠明细,如满10返5(抢单时快照)',
     PRIMARY KEY (`id`),
     INDEX `idx_grab_config_id` (`grab_config_id`),
     INDEX `idx_user_id` (`user_id`)
