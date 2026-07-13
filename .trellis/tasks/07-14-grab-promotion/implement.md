@@ -27,7 +27,7 @@
 - [x] **B3 GrabCronScheduler**：仿 `MonitorCronScheduler`，refreshAll/refresh/cancel/schedule；支持 cron 与 execute_at 两种。
 - [x] **B4 定时执行体**：`doGrab` 重试循环（attempt/max_retry/retry_interval_ms）；code=6 不重试；成功停用+推送/失败达上限推送。
 - [x] **B5 lead_ms**：execute_at 场景 `instant.minusNanos(leadMs*1e6)`；cron 场景触发后即发。
-- [ ] **B6 JWT 过期提醒**：未实现（待补，独立轻量定时）。
+- [x] **B6 JWT 过期提醒**：`GrabJwtExpireTask` 每天 9:07 扫描所有用户 `xc_sivir` 的 exp，临过期(1天内)/已过期推送 WxPresser，按 exp 去重(同一 exp 只推一次，重新录入后 exp 变化重新进入提醒)。
 - [x] **B7 Controller 补全**：全部接口已实现（见 A6）。
 - [x] **B8 自测**：手动抢单链路已端到端验证（见 A7）。cron / execute_at 到点触发与 code=4 重试为调度器同源逻辑，待有真实未开始活动时再验证（核心抢单调用已确认）。
 - [x] **B9 编译 + 回归**：编译通过；现有监控/通知功能未改动（零回归）。
