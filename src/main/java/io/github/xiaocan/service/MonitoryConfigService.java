@@ -1,0 +1,48 @@
+package io.github.xiaocan.service;
+
+import com.baomidou.mybatisplus.extension.service.IService;
+import io.github.xiaocan.model.dto.monitorConfigDTO;
+import io.github.xiaocan.model.entity.MonitorConfigEntity;
+import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
+import io.github.xiaocan.model.enums.MonitorTypeEnums;
+import io.github.xiaocan.model.vo.NotifyConfigVO;
+
+import java.util.List;
+
+/**
+ * 通知服务接口
+ *
+ * @author xiaochan
+ */
+public interface MonitoryConfigService extends IService<MonitorConfigEntity> {
+
+
+    List<NotifyConfigVO> listByUserId();
+
+    List<MonitorConfigEntity> list(MonitorTypeEnums type, MonitorConfigStatusEnums enums);
+
+    /**
+     * 查询指定状态下所有配置了 cron 的配置（不区分类型，一次性查询）
+     */
+    List<MonitorConfigEntity> listAllWithCron(MonitorConfigStatusEnums status);
+
+    /**
+     * 查询指定类型和状态下未配置 cron 的配置
+     */
+    List<MonitorConfigEntity> listWithoutCron(MonitorTypeEnums type, MonitorConfigStatusEnums enums);
+
+    /**
+     * 查询多个类型和状态下未配置 cron 的配置（一次查询）
+     */
+    List<MonitorConfigEntity> listWithoutCron(List<MonitorTypeEnums> types, MonitorConfigStatusEnums enums);
+
+    void addUpdateConfig(monitorConfigDTO dto);
+
+    void updateConfig(int id, MonitorConfigStatusEnums statusEnums, String remark);
+
+    void deleteById(Integer configId);
+
+    void deleteByLocationId(Integer locationId);
+
+    void toggleStatus(Integer configId, MonitorConfigStatusEnums status);
+}

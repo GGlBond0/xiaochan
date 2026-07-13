@@ -1,0 +1,85 @@
+name: Build Production JAR with Config
+
+on:
+  workflow_dispatch:
+    inputs:
+      mysql_host:
+        description: 'MySQL Host'
+        required: false
+        default: '127.0.0.1'
+      mysql_port:
+        description: 'MySQL Port'
+        required: false
+        default: '3306'
+      mysql_db:
+        description: 'MySQL Database Name'
+        required: false
+        default: 'xiaocan'
+      mysql_user:
+        description: 'MySQL Username'
+        required: false
+        default: 'root'
+      mysql_password:
+        description: 'MySQL Password (输入你的MySQL密码)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java-version: ['17']
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up JDK ${{ matrix.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ matrix.java-version }}
+        distribution: 'temurin'
+        cache: maven
+    
+    - name: Create Production Config
+      run: |
+        cat > src/main/resources/application.yaml << 'YAML_EOF'
+        server:
+          port: 10234
+        spring:
+          data:
+            redis:
+              host: ${{ github.event.inputs.mysql_host }}
+              password: 
+              database: 0
+          datasource:
+            url: jdbc:mysql://${{ github.event.inputs.mysql_host }}:${{ github.event.inputs.mysql_port }}/${{ github.event.inputs.mysql_db }}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+            username: ${{ github.event.inputs.mysql_user }}
+            password: ${{ github.event.inputs.mysql_password }}
+            driver-class-name: com.mysql.cj.jdbc.Driver
+          jackson:
+            time-zone: GMT+8
+            date-format: yyyy-MM-dd HH:mm:ss
+            serialization:
+              write-dates-as-timestamps: false
+        
+        mybatis-plus:
+          configuration:
+            log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+            map-underscore-to-camel-case: true
+          global-config:
+            db-config:
+              id-type: auto
+              logic-delete-field: deleted
+              logic-delete-value: 1
+              logic-not-delete-value: 0
+        YAML_EOF
+    
+    - name: Build with Maven
+      run: mvn clean package -DskipTests
+    
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: xiaocan-prod-${{ matrix.java-version }}
+        path: target/xiaocan.jar
+        retention-days: 30
