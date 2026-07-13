@@ -40,9 +40,12 @@
 
 ## 配套（前端，独立仓库 xiaocan-front，后端先行）
 
-- [ ] **F1** 登录态绑定页（粘贴 header → 调 `/api/grab/login-state`）。
-- [ ] **F2** 抢单配置页（选 promotion_id 一键带入 + cron/execute_at + 重试参数）。
-- [ ] **F3** 抢单记录页。
+- [x] **F1** 登录态绑定页 `GrabLoginView`（粘贴 header/抓包JSON → 调 `/api/grab/login-state`，显示 JWT 剩余天数）。
+- [x] **F2** 抢单配置页 `GrabConfigView`（CRUD + 手动抢一次 + 从活动列表 `/api/xiaochan/query` 一键带入 promotion_id + cron/execute_at + 重试参数）。
+- [x] **F3** 抢单记录页 `GrabHistoryView`（记录列表 + 触发类型/重试次数/结果/code/订单号）。
+- [x] NavBar/router 增加抢单/抢单登录态/抢单记录入口。
+- [x] 前端构建 `npm run build`(含 vue-tsc 类型检查) 通过。
+- [x] 部署到生产 `/var/www/xiaocan/dist`（nginx 反代 + history 回退验证通过），经 nginx 端到端访问 `/api/grab/*` 正常返回真实数据。
 
 ## 验证命令
 - 编译：`mvn -DskipTests package`（本地，不在生产服务器）。
