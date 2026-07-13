@@ -157,6 +157,92 @@ public class XiaochanHttp {
         List<StoreInfo> storeInfos = parsePromotion(jsonObject.getJSONObject("promotion_detail"));
         return storeInfos.get(0);
     }
+    /**
+     * 抢单接口服务名/方法名
+     */
+    private static final String GRAB_SERVER_NAME = "Silkworm";
+    private static final String GRAB_METHOD_NAME = "SilkwormService.GrabPromotionQuota";
+
+    /**
+     * 抢单：调用 SilkwormService.GrabPromotionQuota。
+     * 复用 X-Ashe 加密算法与代理机制；header 带 Android 登录态。
+     * silk_id 取自 auth（登录态记录，X-Teemo）。
+     *
+     * @param auth        登录态（X-Sivir/X-Teemo/X-Session-Id，Nami 为空则随机）
+     * @param cityCode    城市编码
+     * @param latitude    纬度
+     * @param longitude   经度
+     * @param promotionId 活动 id（当天有效）
+     * @return 小蚕原始响应 JSON（含 status.code / promotion_order_id / timeout）
+     */
+    public JSONObject grabPromotionQuota(GrabAuth auth, Integer cityCode, String latitude, String longitude,
+                                         Integer promotionId) {
+        Integer silkId = auth.getSilkId() == null ? 0 : auth.getSilkId();
+        Map<String, Object> body = new HashMap<>();
+        body.put("latitude", new BigDecimal(latitude));
+        body.put("longitude", new BigDecimal(longitude));
+        body.put("city_code", cityCode);
+        body.put("store_platform", 1);
+        body.put("if_advance_order", false);
+        body.put("promotion_id", promotionId);
+        body.put("silk_id", silkId);
+        String resBody = postWithResAuth(BASE_URL, JSONObject.toJSONString(body), cityCode,
+                GRAB_SERVER_NAME, GRAB_METHOD_NAME, auth);
+        return JSONObject.parseObject(resBody);
+    }
+
+    /**
+     * 带登录态 header 的 POST（代理/403 重试逻辑同 {@link #postWithRes}）。
+     * x-Teemo = silk_id，X-Vayne = 用户id（见抓包 favorites1.json）。
+     */
+    private String postWithResAuth(String url, String body, Integer cityCode, String serverName, String methodName, GrabAuth auth) {
+        Long timeMillis = System.currentTimeMillis();
+        String nami = (auth.getNami() != null && !auth.getNami().isEmpty()) ? auth.getNami() : getNami();
+        String ashe = getAshe(timeMillis, serverName, methodName, nami);
+        HttpResponse response = executeWithProxy(proxy -> HttpUtil.createPost(url)
+                .headerMap(getGrabHeaders(timeMillis, ashe, cityCode, serverName, methodName, nami, auth), true)
+                .timeout(ProxyHolder.requestTimeout())
+                .body(body), "grabPromotionQuota");
+        if (response == null || !response.isOk()) {
+            int status = response == null ? -1 : response.getStatus();
+            log.error("抢单状态码错误: {}, body: {}", status, response == null ? "" : response.body());
+            throw new BusinessException("状态码错误:" + status);
+        }
+        String resBody = response.body();
+        response.close();
+        return resBody;
+    }
+
+    /**
+     * 抢单请求头（Android 登录态）。x-Teemo=silk_id，X-Vayne=用户id。
+     */
+    private Map<String, String> getGrabHeaders(Long timeMillis, String ashe, Integer cityCode,
+                                               String serverName, String methodName, String nami, GrabAuth auth) {
+        Integer silkId = auth.getSilkId() == null ? 0 : auth.getSilkId();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("servername", serverName);
+        headers.put("methodname", methodName);
+        headers.put("X-Ashe", ashe);
+        headers.put("X-Nami", nami);
+        headers.put("X-Garen", String.valueOf(timeMillis));
+        headers.put("X-Platform", "Android");
+        headers.put("x-Annie", "XC");
+        headers.put("X-Session-Id", auth.getSessionId());
+        headers.put("User-Agent", "XC;Android;3.18.3;");
+        headers.put("X-Vayne", String.valueOf(auth.getUserId()));
+        headers.put("x-Teemo", String.valueOf(silkId));
+        headers.put("X-Sivir", auth.getSivir());
+        headers.put("X-Version", "3.18.3.3");
+        if (cityCode != null) {
+            headers.put("X-CityCode", String.valueOf(cityCode));
+            headers.put("X-City", String.valueOf(cityCode));
+        }
+        headers.put("Content-Type", "application/json; charset=utf-8");
+        headers.put("Accept-Encoding", "gzip");
+        headers.put("Connection", "Keep-Alive");
+        return headers;
+    }
+
     private List<AddressVO> parseBodyToAddress(String body) {
         JSONObject jsonObject = JSONObject.parseObject(body);
         if (jsonObject.getJSONObject("status").getInteger("code") != 0) {
