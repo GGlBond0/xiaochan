@@ -108,3 +108,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 服务器资源精简:停用openclaw/new-api/rustdesk
+
+**Date**: 2026-07-14
+**Task**: 服务器资源精简:停用openclaw/new-api/rustdesk
+**Branch**: `main`
+
+### Summary
+
+运维任务(无代码改动):检查121.91.175.192资源占用,1.7G内存可用仅297M。排查后用户确认停用openclaw-gateway(307M,systemd user service stop+disable)、new-api(Docker容器stop+restart=no+杀裸进程)、rustdesk(Docker容器stop+restart=no)、openclaw-sbx容器rm。内存可用297M→652M(释放~350M)。全程验证xiaocan服务active+首页HTTP200不受影响。容器仅stop保留可恢复未删镜像。本会话前段已完成distance-3km端到端上线(代理修复+MySQL修复,已归档记录于session3)。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d3dcbd5` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
