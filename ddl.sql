@@ -215,3 +215,21 @@ CREATE TABLE `grab_login_state` (
 ALTER TABLE `grab_config`
     ADD COLUMN `login_state_id` INT NULL DEFAULT NULL COMMENT '绑定的登录态id(grab_login_state.id)' AFTER `user_id`;
 
+
+
+-- ----------------------------
+-- Table structure for proxy_config
+-- ----------------------------
+DROP TABLE IF EXISTS `proxy_config`;
+CREATE TABLE `proxy_config`  (
+  `id`              INT NOT NULL AUTO_INCREMENT COMMENT '主键ID，固定1（全局单份）',
+  `enabled`         TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否启用代理',
+  `api_url`         VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '代理API地址',
+  `ttl`             INT NOT NULL DEFAULT 28 COMMENT '代理缓存有效期(秒)',
+  `retry`           INT NOT NULL DEFAULT 3 COMMENT '失败换代理重试次数',
+  `request_timeout` INT NOT NULL DEFAULT 5000 COMMENT '上游请求超时(毫秒)',
+  `create_time`     DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time`     DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted`         TINYINT(1) NULL DEFAULT 0 COMMENT '逻辑删除标志',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '代理IP池全局配置表' ROW_FORMAT = Dynamic;
