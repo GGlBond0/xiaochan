@@ -208,3 +208,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 饭票数量查询与抢单前校验
+
+**Date**: 2026-07-14
+**Task**: 饭票数量查询与抢单前校验
+**Branch**: `main`
+
+### Summary
+
+新增 GET /api/grab/card/count 按 cardId 聚合各类卡券数量（含饭票 cardId==1），复用 getUserCardList 翻页取全(上限200)。GrabServiceImpl doGrab 抢单前校验饭票，为 0 落 history(code=-1)+推送失败不发上游请求规避 WAF 风控，查询失败(null)放行不误杀。抽 countTicketByAuth(auth) 私有方法绕开 getByCurrentRequest，解决定时任务(CRON/ONESHOT)无 HTTP 请求上下文会抛错的隐患。抽出 resolveAuth 复用登录态校验。README 勾掉手动/自动抢单 todo+补更新记录。本地 mvn 编译通过，trellis-check 子代理复核六项 AC 全过无需修复。spec 更新：error-handling 记录定时任务复用方法不能依赖 HTTP 上下文 gotcha，quality-guidelines 加两条 code review 检查项。前端(xiaocan-front)饭票张数展示另开任务。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cbfbf4b` | (see git log) |
+| `1b44c75` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
