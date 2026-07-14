@@ -51,3 +51,5 @@ Spring Boot 3.4.1 / Java 17 / Jakarta EE 命名空间。无 lint 配置、无 ch
 - 日志是否暴露凭据（PROXY_API_URL vkey / MySQL 密码 / token）。
 - application.yaml 改动是否破坏占位符 `${MYSQL_*}`（生产靠 EnvironmentFile 注入）。
 - 实体是否该有逻辑删除字段（`@TableLogic deleted`），历史表如 `store_pushed_history` 例外。
+- **定时任务复用的 service 方法是否避开 `getByCurrentRequest()`**（见 error-handling.md「定时任务复用的方法不能依赖 HTTP 请求上下文」）——无请求线程里会抛错，必须显式传 `userId`/`auth`。
+- **发上游请求前是否做了本地可得的前置校验**——本地能判定的配额/状态（如饭票数为 0）先在 service 短路：落 history + 推送失败，不发请求。一次无效请求 = 一次 WAF 风控暴露，能省则省。查询失败（`null`）应放行而非误杀（宁可多发不可漏抢）。
