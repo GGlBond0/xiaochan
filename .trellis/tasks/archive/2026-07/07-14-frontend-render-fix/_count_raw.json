@@ -1,0 +1,1 @@
+{"tabId":"C3958EFAA7183D369B535534023761EE","expression":"(async()=>{const t=localStorage.getItem('token')||'';const r=await fetch('/api/grab/card/count?loginStateId=1',{headers:{token:t}});const body=await r.text();return JSON.stringify({status:r.status,body:body.slice(0,300)})})()"}

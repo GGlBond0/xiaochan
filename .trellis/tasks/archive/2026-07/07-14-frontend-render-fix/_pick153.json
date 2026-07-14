@@ -1,0 +1,1 @@
+{"tabId":"C3958EFAA7183D369B535534023761EE","expression":"(()=>{const opts=Array.from(document.querySelectorAll('.el-select-dropdown__item, li.el-select-dropdown__item'));const t=opts.find(o=>o.textContent.includes('5263106'));if(t){t.click();return 'picked'}return 'nf '+opts.length})()"}

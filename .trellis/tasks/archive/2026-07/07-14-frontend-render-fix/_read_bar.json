@@ -1,0 +1,1 @@
+{"tabId":"C3958EFAA7183D369B535534023761EE","expression":"(()=>{const bar=document.querySelector('.card-count-bar');return bar?bar.textContent.replace(/\\s+/g,' ').trim():'no bar'})()"}
