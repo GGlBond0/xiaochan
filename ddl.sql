@@ -280,7 +280,7 @@ CREATE TABLE `merchant_blacklist_config`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '商家名称关键字黑名单全局配置表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Table structure for lottery_auth  (小蚕霸王餐刷任务 mini 登录态，独立于 grab_login_state)
+-- Table structure for lottery_auth  (小蚕霸王餐刷任务 App(Android) 登录态，独立于 grab_login_state)
 -- ----------------------------
 DROP TABLE IF EXISTS `lottery_auth`;
 CREATE TABLE `lottery_auth`  (
@@ -290,11 +290,12 @@ CREATE TABLE `lottery_auth`  (
   `silk_id`     INT NOT NULL COMMENT '小蚕 silk_id(请求body + X-Teemo)',
   `user_vayne`  INT NULL DEFAULT NULL COMMENT '小蚕用户id(X-Vayne)',
   `session_id`  VARCHAR(64) NOT NULL COMMENT '会话id(X-Session-Id)',
-  `nami`        VARCHAR(32) NULL DEFAULT NULL COMMENT 'X-Nami(可选,默认随机)',
+  `sivir`       VARCHAR(512) NOT NULL COMMENT 'X-Sivir JWT(Android 登录态,必填)',
+  `city_code`   INT NULL DEFAULT NULL COMMENT 'x-City 城市码,如 440111(抓包解析)',
   `raw_headers` TEXT NULL DEFAULT NULL COMMENT '录入的原始抓包 header(留底)',
   `create_time`  DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time`  DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted`      TINYINT(1) NULL DEFAULT 0 COMMENT '逻辑删除标志',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id` (`user_id`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '小蚕霸王餐刷任务 mini 登录态(多组)' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '小蚕霸王餐刷任务 App(Android) 登录态(多组)' ROW_FORMAT = Dynamic;

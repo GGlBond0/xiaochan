@@ -26,10 +26,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 霸王餐刷浏览任务服务实现。
+ * 霸王餐刷浏览任务服务实现（App / Android 登录态）。
  *
- * 流程：解析 mini 登录态 → LotteryInfo 查未完成浏览任务 → 逐个 AddLotteryTimes(type) → GetLotteryProgress 对比机会数。
- * type→任务映射详见 .trellis/tasks/07-14-bawangcan-lottery-task/research/type-map.md。
+ * 流程：解析 App 登录态 → LotteryInfo 查未完成浏览任务 → 逐个 AddLotteryTimes(type) → GetLotteryProgress 对比机会数。
+ * type→任务映射详见 .trellis/tasks/07-15-bawangcan-lottery-app-auth/research/capture-app-lottery.md。
  */
 @Slf4j
 @Service
@@ -37,8 +37,6 @@ public class LotteryServiceImpl implements LotteryService {
 
     private static final Pattern HEADER_LINE =
             Pattern.compile("(?i)^\\s*\"?([A-Za-z-]+)\"?\\s*[:：]\\s*\"?(.*?)\"?\\s*$");
-
-    private static final int APP_ID = 20;
 
     /**
      * LotteryInfo.lottery_info 标志位 → AddLotteryTimes.type 映射（已抓包确认）。
@@ -63,7 +61,7 @@ public class LotteryServiceImpl implements LotteryService {
         TYPE_TO_DESC.put(9, "领饿了么红包");
         TYPE_TO_DESC.put(10, "浏览福利页");
         TYPE_TO_DESC.put(11, "浏览霸王餐页");
-        // 注：is_view_tp_ad / is_view_douyin_mall 对应 type 未抓到，后续补抓后加。
+        // 注：is_view_tp_ad / is_view_douyin_mall 在 App 端不走 AddLotteryTimes（WebView 计时自动标记），纯接口刷不到，故不在此映射。
     }
 
     private final LotteryHttp lotteryHttp = new LotteryHttp();
@@ -89,7 +87,8 @@ public class LotteryServiceImpl implements LotteryService {
                 }
             } catch (Exception ignore) { }
         }
-        String sessionId = null, nami = null, vayne = null, teemo = null;
+        String sessionId = null, sivir = null, vayne = null, teemo = null;
+        Integer cityCode = null;
         // 抓包 JSON body 取 silk_id 兜底
         Integer bodySilkId = parseSilkIdFromBody(dto.getRawHeaders());
         for (String line : raw.split("\\r?\\n")) {
@@ -102,14 +101,22 @@ public class LotteryServiceImpl implements LotteryService {
             }
             switch (key) {
                 case "x-session-id" -> sessionId = val;
-                case "x-nami" -> nami = val;
+                case "x-sivir" -> sivir = val;
                 case "x-vayne" -> vayne = val;
                 case "x-teemo" -> teemo = val;
+                case "x-city", "x-citycode" -> {
+                    if (cityCode == null && StringUtils.hasText(val)) {
+                        try { cityCode = Integer.parseInt(val); } catch (Exception ignore) { }
+                    }
+                }
                 default -> { }
             }
         }
         if (!StringUtils.hasText(sessionId)) {
             throw new BusinessException("未解析到登录态：缺少 X-Session-Id");
+        }
+        if (!StringUtils.hasText(sivir)) {
+            throw new BusinessException("未解析到登录态：缺少 X-Sivir（App 登录态 JWT）");
         }
         Integer silkId = bodySilkId;
         if (silkId == null && StringUtils.hasText(teemo)) {
@@ -143,7 +150,8 @@ public class LotteryServiceImpl implements LotteryService {
         entity.setSilkId(silkId);
         entity.setUserVayne(userVayne);
         entity.setSessionId(sessionId);
-        entity.setNami(StringUtils.hasText(nami) ? nami : null);
+        entity.setSivir(sivir);
+        entity.setCityCode(cityCode);
         entity.setRawHeaders(dto.getRawHeaders());
         if (entity.getId() == null) {
             lotteryAuthMapper.insert(entity);
@@ -168,6 +176,7 @@ public class LotteryServiceImpl implements LotteryService {
             vo.setSilkId(e.getSilkId());
             vo.setUserVayne(e.getUserVayne());
             vo.setSessionId(e.getSessionId());
+            vo.setCityCode(e.getCityCode());
             vo.setUpdateTime(e.getUpdateTime());
             result.add(vo);
         }
@@ -195,10 +204,11 @@ public class LotteryServiceImpl implements LotteryService {
                 .silkId(entity.getSilkId())
                 .userVayne(entity.getUserVayne())
                 .sessionId(entity.getSessionId())
-                .nami(entity.getNami())
+                .sivir(entity.getSivir())
+                .cityCode(entity.getCityCode())
                 .build();
         if (!auth.isComplete()) {
-            throw new BusinessException("登录态不完整：silk_id 或 X-Session-Id 缺失");
+            throw new BusinessException("登录态不完整：silk_id 或 X-Session-Id 或 X-Sivir 缺失");
         }
 
         LotteryTaskResultVO vo = new LotteryTaskResultVO();

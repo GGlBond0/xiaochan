@@ -4,8 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * 霸王餐刷任务 mini 登录态录入/更新（粘贴抓包 header 原文）。
- * 与抢单 GrabLoginStateDTO 分离：mini 登录态无 X-Sivir，只需 X-Session-Id + silk_id。
+ * 霸王餐刷任务 App(Android) 登录态录入/更新（粘贴抓包 header 原文）。
+ * 与抢单 GrabLoginStateDTO 物理隔离：App 登录态需 X-Session-Id + X-Sivir(JWT) + silk_id。
  */
 @Data
 public class LotteryAuthDTO {
@@ -15,7 +15,7 @@ public class LotteryAuthDTO {
     private String name;
     /**
      * 抓包请求头原文，多行 "Key: Value" 或抓包 JSON。
-     * 必须含 X-Session-Id 与 x-Teemo（或 body.silk_id）。
+     * 必须含 X-Session-Id、X-Sivir 与 x-Teemo（或 body.silk_id）。
      */
     @NotBlank
     private String rawHeaders;

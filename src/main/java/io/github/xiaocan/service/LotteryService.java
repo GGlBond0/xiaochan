@@ -12,7 +12,7 @@ import java.util.List;
 public interface LotteryService {
 
     /**
-     * 新增/更新 mini 登录态（解析粘贴的抓包 header）。id 为空则新增。
+     * 新增/更新 App(Android) 登录态（解析粘贴的抓包 header）。id 为空则新增。
      */
     Integer saveAuth(LotteryAuthDTO dto, Integer id);
 

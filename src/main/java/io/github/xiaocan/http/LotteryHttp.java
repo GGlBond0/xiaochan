@@ -14,20 +14,19 @@ import java.util.Random;
 import java.util.function.Function;
 
 /**
- * 小蚕霸王餐抽奖 RPC 调用（mini 登录态）。
- * 复用 XiaochanHttp 的 X-Ashe 签名算法 + ProxyHolder 代理重试机制，但走 mini header（X-Platform=mini），
- * 与抢单的 Android 登录态分离。
+ * 小蚕霸王餐抽奖 RPC 调用（App / Android 登录态）。
+ * 复用 XiaochanHttp 的 X-Ashe 签名算法 + ProxyHolder 代理重试机制，走 Android header（X-Platform=Android + X-Sivir JWT）。
  *
- * 已抓包确认的接口（详见 .trellis/tasks/07-14-bawangcan-lottery-task/research/）：
+ * 抓包确认（详见 .trellis/tasks/07-15-bawangcan-lottery-app-auth/research/capture-app-lottery.md）：
+ * 端点 gwh.xiaocantech.com，body 无 app_id，仅 silk_id（加机会多 type）。
  * - SilkwormLotteryMobile.LotteryInfo       查抽奖机会来源（is_view_xxx 未完成项）
  * - SilkwormLotteryMobile.AddLotteryTimes   完成浏览任务 +1 机会（无验证，纯接口可刷）
- * - SilkwormLotteryMobile.GetLotteryProgress 查当前机会数 lottery_count
- * - ActivityTaskMobileService.UserTaskV2     任务/积分状态
+ * - SilkwormLotteryMobile.GetLotteryProgress 查当前机会数 lottery_count（含阶梯 first/second_step_count）
  */
 @Slf4j
 public class LotteryHttp {
 
-    private static final String BASE_URL = "https://gw.xiaocantech.com/rpc";
+    private static final String BASE_URL = "https://gwh.xiaocantech.com/rpc";
 
     /** 霸王餐抽奖服务名/方法名 */
     private static final String LOTTERY_SERVER = "SilkwormLottery";
@@ -38,8 +37,6 @@ public class LotteryHttp {
     /** 任务/积分状态服务 */
     private static final String TASK_SERVER = "ActivityTask";
     private static final String USER_TASK_METHOD = "ActivityTaskMobileService.UserTaskV2";
-
-    private static final int APP_ID = 20;
 
     /**
      * 获取 X-Ashe 签名（与 XiaochanHttp.getAshe 同算法）。
@@ -100,16 +97,15 @@ public class LotteryHttp {
     private Map<String, Object> baseBody(LotteryAuth auth) {
         Map<String, Object> body = new HashMap<>();
         body.put("silk_id", auth.getSilkId());
-        body.put("app_id", APP_ID);
         return body;
     }
 
     private JSONObject postAuth(String body, String serverName, String methodName, LotteryAuth auth, String tag) {
         Long timeMillis = System.currentTimeMillis();
-        String nami = (auth.getNami() != null && !auth.getNami().isEmpty()) ? auth.getNami() : getNami(String.valueOf(auth.getSilkId()));
+        String nami = getNami(String.valueOf(auth.getSilkId()));
         String ashe = getAshe(timeMillis, serverName, methodName, nami);
         HttpResponse response = executeWithProxy(proxy -> HttpUtil.createPost(BASE_URL)
-                .headerMap(getMiniHeaders(timeMillis, ashe, serverName, methodName, nami, auth), true)
+                .headerMap(getAndroidHeaders(timeMillis, ashe, serverName, methodName, nami, auth), true)
                 .timeout(ProxyHolder.requestTimeout())
                 .body(body), tag);
         if (response == null || !response.isOk()) {
@@ -177,32 +173,31 @@ public class LotteryHttp {
     }
 
     /**
-     * mini 登录态请求头（电脑微信小程序抓包值）。
+     * App(Android) 登录态请求头（小蚕 App 抓包值，端点 gwh.xiaocantech.com）。
+ * body 无 app_id，header 无 appid；X-Sivir JWT 必填。
      */
-    private Map<String, String> getMiniHeaders(Long timeMillis, String ashe, String serverName,
-                                                String methodName, String nami, LotteryAuth auth) {
+    private Map<String, String> getAndroidHeaders(Long timeMillis, String ashe, String serverName,
+                                                   String methodName, String nami, LotteryAuth auth) {
         Map<String, String> headers = new HashMap<>();
         headers.put("servername", serverName);
         headers.put("methodname", methodName);
         headers.put("X-Ashe", ashe);
         headers.put("X-Nami", nami);
         headers.put("X-Garen", String.valueOf(timeMillis));
-        headers.put("X-Platform", "mini");
-        headers.put("X-Version", "3.18.3.37");
-        headers.put("version", "3.18.3.37");
-        headers.put("appid", String.valueOf(APP_ID));
+        headers.put("X-Platform", "Android");
+        headers.put("X-Version", "3.18.3.3");
         headers.put("x-Annie", "XC");
-        headers.put("xweb_xhr", "1");
         headers.put("X-Session-Id", auth.getSessionId());
-        headers.put("X-Model", "microsoft microsoft");
-        headers.put("x-City", "0");
         headers.put("x-Teemo", String.valueOf(auth.getSilkId()));
         if (auth.getUserVayne() != null) {
             headers.put("X-Vayne", String.valueOf(auth.getUserVayne()));
         }
-        headers.put("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 MicroMessenger MiniProgramEnv/Windows WindowsWechat/WMPF");
-        headers.put("Content-Type", "application/json");
-        headers.put("Accept", "*/*");
+        headers.put("X-Sivir", auth.getSivir());
+        if (auth.getCityCode() != null) {
+            headers.put("x-City", String.valueOf(auth.getCityCode()));
+        }
+        headers.put("User-Agent", "XC;Android;3.18.3;");
+        headers.put("Content-Type", "application/json; charset=utf-8");
         return headers;
     }
 

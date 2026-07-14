@@ -9,8 +9,8 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 小蚕霸王餐刷任务 mini 登录态（独立于 grab_login_state，不影响抢单）。
- * 来源：电脑微信小蚕惠生活小程序抓包，解析 X-Session-Id / x-Teemo(silk_id) / X-Vayne(user_id) / X-Nami。
+ * 小蚕霸王餐刷任务 App(Android) 登录态（独立于 grab_login_state，不影响抢单）。
+ * 来源：小蚕 App 抓包，解析 X-Session-Id / x-Teemo(silk_id) / X-Vayne(user_id) / X-Sivir(JWT) / x-City。
  */
 @Data
 @TableName("lottery_auth")
@@ -39,9 +39,13 @@ public class LotteryAuthEntity {
      */
     private String sessionId;
     /**
-     * X-Nami（可选，默认随机）
+     * X-Sivir JWT（Android 登录态，必填）
      */
-    private String nami;
+    private String sivir;
+    /**
+     * x-City 城市码（如 440111，抓包解析，可为空）
+     */
+    private Integer cityCode;
     /**
      * 录入的原始抓包 header（留底）
      */

@@ -4,9 +4,9 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 小蚕霸王餐刷任务 mini 登录态。
- * 来源：电脑微信小蚕惠生活小程序抓包，解析 X-Session-Id / x-Teemo(silk_id) / X-Vayne(user_id) / X-Nami。
- * 与抢单的 GrabAuth（Android 登录态，强依赖 X-Sivir JWT）分离，避免 isComplete 互扰。
+ * 小蚕霸王餐刷任务 App(Android) 登录态。
+ * 来源：小蚕 App 抓包，解析 X-Session-Id / x-Teemo(silk_id) / X-Vayne(user_id) / X-Sivir(JWT) / x-City。
+ * 与抢单的 GrabAuth 物理隔离（各自独立表），但同为 Android 登录态来源，方便项目其它部分复用。
  */
 @Data
 @Builder
@@ -24,14 +24,20 @@ public class LotteryAuth {
      */
     private String sessionId;
     /**
-     * X-Nami（可选，为空则随机生成）
+     * X-Sivir JWT（Android 登录态，必填）
      */
-    private String nami;
+    private String sivir;
+    /**
+     * x-City 城市码（如 440111，可为空）
+     */
+    private Integer cityCode;
 
     /**
-     * mini 登录态完整性校验：silkId + sessionId 必填（无 X-Sivir JWT）。
+     * App 登录态完整性校验：silkId + sessionId + sivir 必填（带 X-Sivir JWT）。
      */
     public boolean isComplete() {
-        return silkId != null && sessionId != null && !sessionId.isEmpty();
+        return silkId != null
+                && sessionId != null && !sessionId.isEmpty()
+                && sivir != null && !sivir.isEmpty();
     }
 }
