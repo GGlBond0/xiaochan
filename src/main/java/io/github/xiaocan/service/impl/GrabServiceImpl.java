@@ -136,8 +136,25 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                 throw new BusinessException("无权修改该登录态");
             }
         } else {
-            entity = new GrabLoginStateEntity();
-            entity.setUserId(user.getId());
+            // 去重：同一系统用户下，同一个小蚕账号(xc_user_id)只保留一条登录态。
+            // 重复录入(如换地址再录一次)则更新既有那条，而非新增重复行。
+            if (xcUserId != null) {
+                GrabLoginStateEntity exist = grabLoginStateMapper.selectOne(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GrabLoginStateEntity>()
+                                .eq(GrabLoginStateEntity::getUserId, user.getId())
+                                .eq(GrabLoginStateEntity::getXcUserId, xcUserId)
+                                .last("limit 1"));
+                if (exist != null) {
+                    entity = exist;
+                    id = exist.getId();
+                } else {
+                    entity = new GrabLoginStateEntity();
+                    entity.setUserId(user.getId());
+                }
+            } else {
+                entity = new GrabLoginStateEntity();
+                entity.setUserId(user.getId());
+            }
         }
         // 绑定地址校验：locationId 非空时必须属于当前用户
         Long locationId = dto.getLocationId();
