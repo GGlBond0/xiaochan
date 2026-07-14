@@ -1,6 +1,5 @@
 package io.github.xiaocan.http;
 
-import io.github.xiaocan.model.entity.GrabLoginStateEntity;
 import lombok.Builder;
 import lombok.Data;
 
@@ -31,19 +30,6 @@ public class GrabAuth {
      * silk_id（X-Teemo / 请求体 silk_id）
      */
     private Integer silkId;
-
-    public static GrabAuth from(GrabLoginStateEntity state) {
-        if (state == null) {
-            return null;
-        }
-        return GrabAuth.builder()
-                .sivir(state.getXcSivir())
-                .userId(state.getXcUserId())
-                .sessionId(state.getXcSessionId())
-                .nami(state.getXcNami())
-                .silkId(state.getSilkId())
-                .build();
-    }
 
     /**
      * 登录态是否完整可用

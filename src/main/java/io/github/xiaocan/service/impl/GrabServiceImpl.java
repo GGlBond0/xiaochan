@@ -10,19 +10,16 @@ import io.github.xiaocan.http.XiaochanHttp;
 import io.github.xiaocan.mapper.GrabConfigMapper;
 import io.github.xiaocan.model.entity.GrabConfigEntity;
 import io.github.xiaocan.model.entity.GrabHistoryEntity;
-import io.github.xiaocan.model.entity.GrabLoginStateEntity;
 import io.github.xiaocan.model.entity.LocationEntity;
 import io.github.xiaocan.model.entity.LoginStateEntity;
 import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.StoreInfo;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.dto.GrabConfigDTO;
-import io.github.xiaocan.model.dto.GrabLoginStateDTO;
 import io.github.xiaocan.model.vo.GrabCardCountVO;
 import io.github.xiaocan.model.vo.GrabCardVO;
 import io.github.xiaocan.model.vo.GrabConfigVO;
 import io.github.xiaocan.model.vo.GrabHistoryVO;
-import io.github.xiaocan.model.vo.GrabLoginStateVO;
 import io.github.xiaocan.model.vo.GrabResultVO;
 import io.github.xiaocan.service.GrabService;
 import io.github.xiaocan.service.LocationService;
@@ -36,15 +33,11 @@ import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 抢单服务实现
@@ -64,193 +57,10 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     @Lazy
     private GrabCronScheduler grabCronScheduler;
     @Resource
-    private io.github.xiaocan.mapper.GrabLoginStateMapper grabLoginStateMapper;
-    @Resource
     private io.github.xiaocan.mapper.GrabHistoryMapper grabHistoryMapper;
     @Resource
     private io.github.xiaocan.service.LoginStateService loginStateService;
 
-    /** 抓包 header 行解析：Key: Value（含大小写变体如 X-Sivir / x-Teemo） */
-    private static final Pattern HEADER_LINE = Pattern.compile("(?i)^\\s*\"?([A-Za-z-]+)\"?\\s*[:：]\\s*\"?(.*?)\"?\\s*$");
-
-    // ==================== 登录态（多组） ====================
-
-    @Override
-    public GrabResultVO saveLoginState(GrabLoginStateDTO dto, Integer id) {
-        UserEntity user = userService.getByCurrentRequest();
-        String raw = dto.getRawHeaders();
-        // 兼容抓包 JSON：从中提取 headers 节点
-        if (raw.trim().startsWith("{")) {
-            try {
-                JSONObject json = JSONObject.parseObject(raw);
-                JSONObject headers = json.getJSONObject("headers");
-                if (headers != null) {
-                    raw = headers.entrySet().stream()
-                            .map(e -> e.getKey() + ": " + e.getValue())
-                            .reduce((a, b) -> a + "\n" + b).orElse("");
-                }
-                // 兼容 favorites1.json：body 节点含 silk_id
-            } catch (Exception ignore) { }
-        }
-        String sivir = null, sessionId = null, nami = null, vayne = null, teemo = null;
-        // 从抓包 JSON body 取 silk_id（兼容 favorites1.json）
-        Integer bodySilkId = parseSilkIdFromBody(dto.getRawHeaders());
-        for (String line : raw.split("\\r?\\n")) {
-            Matcher m = HEADER_LINE.matcher(line);
-            if (!m.matches()) continue;
-            String key = m.group(1).toLowerCase();
-            String val = m.group(2).trim();
-            if (val.startsWith("[")) {
-                val = val.replaceAll("[\\[\\]\"\\\\]", "");
-            }
-            switch (key) {
-                case "x-sivir" -> sivir = val;
-                case "x-session-id" -> sessionId = val;
-                case "x-nami" -> nami = val;
-                case "x-vayne" -> vayne = val;
-                case "x-teemo" -> teemo = val;
-                default -> { }
-            }
-        }
-        if (!StringUtils.hasText(sivir) || !StringUtils.hasText(sessionId)) {
-            throw new BusinessException("未解析到登录态：缺少 X-Sivir 或 X-Session-Id");
-        }
-        Integer xcUserId = null;
-        if (StringUtils.hasText(vayne)) {
-            try { xcUserId = Integer.parseInt(vayne); } catch (Exception ignore) { }
-        }
-        Long exp = parseJwtExp(sivir);
-        if (xcUserId == null) {
-            Integer jwtUid = parseJwtUserId(sivir);
-            if (jwtUid != null) xcUserId = jwtUid;
-        }
-        if (exp != null && exp * 1000 < System.currentTimeMillis()) {
-            throw new BusinessException("X-Sivir(JWT) 已过期，请重新抓包录入");
-        }
-        // silk_id：优先抓包 body 里的，其次 X-Teemo
-        Integer silkId = bodySilkId;
-        if (silkId == null && StringUtils.hasText(teemo)) {
-            try { silkId = Integer.parseInt(teemo); } catch (Exception ignore) { }
-        }
-
-        GrabLoginStateEntity entity;
-        if (id != null) {
-            entity = grabLoginStateMapper.selectById(id);
-            if (entity == null || !entity.getUserId().equals(user.getId())) {
-                throw new BusinessException("无权修改该登录态");
-            }
-        } else {
-            // 去重：同一系统用户下，同一个小蚕账号(xc_user_id)只保留一条登录态。
-            // 重复录入(如换地址再录一次)则更新既有那条，而非新增重复行。
-            if (xcUserId != null) {
-                GrabLoginStateEntity exist = grabLoginStateMapper.selectOne(
-                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GrabLoginStateEntity>()
-                                .eq(GrabLoginStateEntity::getUserId, user.getId())
-                                .eq(GrabLoginStateEntity::getXcUserId, xcUserId)
-                                .last("limit 1"));
-                if (exist != null) {
-                    entity = exist;
-                    id = exist.getId();
-                } else {
-                    entity = new GrabLoginStateEntity();
-                    entity.setUserId(user.getId());
-                }
-            } else {
-                entity = new GrabLoginStateEntity();
-                entity.setUserId(user.getId());
-            }
-        }
-        // 绑定地址校验：locationId 非空时必须属于当前用户
-        Long locationId = dto.getLocationId();
-        if (locationId != null) {
-            LocationEntity loc = locationService.getById(locationId);
-            if (loc == null || !loc.getUserId().equals(user.getId())) {
-                throw new BusinessException("无权绑定该地址");
-            }
-            entity.setLocationId(locationId);
-        }
-        entity.setName(StringUtils.hasText(dto.getName()) ? dto.getName() : "账号" + (xcUserId == null ? "" : xcUserId));
-        entity.setXcSivir(sivir);
-        entity.setXcSessionId(sessionId);
-        entity.setXcUserId(xcUserId);
-        entity.setXcNami(StringUtils.hasText(nami) ? nami : null);
-        entity.setSilkId(silkId == null ? 0 : silkId);
-        if (exp != null) {
-            entity.setExpireAt(new Date(exp * 1000).toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime());
-        }
-        if (entity.getId() == null) {
-            grabLoginStateMapper.insert(entity);
-        } else {
-            grabLoginStateMapper.updateById(entity);
-        }
-
-        GrabResultVO vo = new GrabResultVO();
-        vo.setSuccess(true);
-        vo.setCode(0);
-        vo.setMsg("登录态已保存 id=" + entity.getId() + "，用户id=" + xcUserId
-                + (exp != null ? "，JWT过期时间=" + entity.getExpireAt() : ""));
-        return vo;
-    }
-
-    @Override
-    public List<GrabLoginStateVO> listLoginState() {
-        Integer uid = userService.getByCurrentRequest().getId();
-        List<GrabLoginStateEntity> list = grabLoginStateMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GrabLoginStateEntity>()
-                        .eq(GrabLoginStateEntity::getUserId, uid)
-                        .orderByDesc(GrabLoginStateEntity::getId));
-        // 内存组装地址名（不联表）：当前用户所有地址建 id->name map
-        java.util.Map<Long, String> locNameMap = new java.util.HashMap<>();
-        for (LocationEntity loc : locationService.list(new com.baomidou.mybatisplus.core.conditions.query
-                .LambdaQueryWrapper<LocationEntity>().eq(LocationEntity::getUserId, uid))) {
-            locNameMap.put(loc.getId(), loc.getName());
-        }
-        LocalDateTime now = LocalDateTime.now();
-        return list.stream().map(e -> {
-            GrabLoginStateVO vo = new GrabLoginStateVO();
-            vo.setId(e.getId());
-            vo.setName(e.getName());
-            vo.setXcUserId(e.getXcUserId());
-            vo.setSilkId(e.getSilkId());
-            vo.setExpireAt(e.getExpireAt());
-            vo.setUpdateTime(e.getUpdateTime());
-            vo.setLocationId(e.getLocationId());
-            if (e.getLocationId() != null) {
-                vo.setLocationName(locNameMap.get(e.getLocationId()));
-            }
-            if (e.getExpireAt() == null) {
-                vo.setExpireStatus("未知");
-            } else if (e.getExpireAt().isBefore(now)) {
-                vo.setExpireStatus("已过期");
-            } else if (e.getExpireAt().isBefore(now.plusDays(1))) {
-                vo.setExpireStatus("即将过期");
-            } else {
-                vo.setExpireStatus("有效");
-            }
-            return vo;
-        }).toList();
-    }
-
-    @Override
-    public void deleteLoginState(Integer id) {
-        Integer uid = userService.getByCurrentRequest().getId();
-        GrabLoginStateEntity entity = grabLoginStateMapper.selectById(id);
-        if (entity == null || !entity.getUserId().equals(uid)) {
-            throw new BusinessException("无权操作");
-        }
-        grabLoginStateMapper.deleteById(id);
-    }
-
-    /** 从抓包 JSON 的 body 节点解析 silk_id（兼容 favorites1.json） */
-    private Integer parseSilkIdFromBody(String raw) {
-        if (raw == null || !raw.trim().startsWith("{")) return null;
-        try {
-            JSONObject json = JSONObject.parseObject(raw);
-            JSONObject body = json.getJSONObject("body");
-            if (body != null) return body.getInteger("silk_id");
-        } catch (Exception ignore) { }
-        return null;
-    }
 
     // ==================== 抢单配置 ====================
 
@@ -717,27 +527,5 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
 
     private void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-    }
-
-    private Long parseJwtExp(String jwt) {
-        JSONObject p = parseJwtPayload(jwt);
-        return p == null ? null : p.getLong("exp");
-    }
-
-    private Integer parseJwtUserId(String jwt) {
-        JSONObject p = parseJwtPayload(jwt);
-        return p == null ? null : p.getInteger("UserId");
-    }
-
-    private JSONObject parseJwtPayload(String jwt) {
-        if (!StringUtils.hasText(jwt)) return null;
-        String[] parts = jwt.split("\\.");
-        if (parts.length < 2) return null;
-        try {
-            byte[] d = Base64.getUrlDecoder().decode(parts[1]);
-            return JSONObject.parse(new String(d, StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            return null;
-        }
     }
 }

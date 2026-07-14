@@ -340,3 +340,13 @@ SELECT `user_id`,`name`,`sivir`,`session_id`,`user_vayne`,`silk_id`,`city_code`,
 FROM `lottery_auth`;
 
 -- 回滚：DROP TABLE login_state; (旧表 grab_login_state / lottery_auth 未删，代码 revert 即恢复)
+
+-- ============================
+-- 旧表 grab_login_state / lottery_auth 已被 login_state 取代（2026-07-15）。
+-- 此处保留其建表 DDL 与上方迁移 INSERT...SELECT：新环境首次初始化时，
+-- 旧表先建(空)→ login_state 建 → 迁移(空表迁空,无影响)。已有数据的环境先建 login_state 再迁数据。
+-- 迁移完成并验证后，可在生产库手动执行(不可逆)：
+--   DROP TABLE IF EXISTS grab_login_state;
+--   DROP TABLE IF EXISTS lottery_auth;
+-- 切勿在迁移前 DROP，否则 INSERT...SELECT 会丢数据。
+-- ============================
