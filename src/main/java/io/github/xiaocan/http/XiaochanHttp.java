@@ -85,7 +85,8 @@ public class XiaochanHttp {
 
     /**
      * 经代理执行上游 HTTP 请求；代理未启用则直连。
-     * 遇 403 失效当前代理并换代理重试，最多 {@link ProxyHolder#retry()} 次。
+     * 遇 403 或网络异常（SocketTimeout/Connection reset 等）失效当前代理并换代理重试，
+     * 最多 {@link ProxyHolder#retry()} 次；全部失败返回 null 由调用方处理。
      * @param reqFn 接收 proxy（[ip,port]，直连时为 null），返回待执行的 HttpRequest
      * @param tag   日志标识（方法名）
      */
@@ -101,7 +102,16 @@ public class XiaochanHttp {
             }
             HttpRequest req = reqFn.apply(proxy);
             req.setHttpProxy(proxy[0], Integer.parseInt(proxy[1]));
-            HttpResponse response = req.execute();
+            HttpResponse response;
+            try {
+                response = req.execute();
+            } catch (Exception e) {
+                // SocketTimeoutException / Connection reset 等网络异常：失效当前代理并换代理重试，
+                // 避免坏代理被命中后整轮重试都用同一坏代理（首页慢、抢单超时的根因）。
+                log.warn("{} 经代理 {}:{} 请求异常，换代理重试({}/{}): {}", tag, proxy[0], proxy[1], i + 1, retry, e.getMessage());
+                ProxyHolder.invalidate();
+                continue;
+            }
             if (response.getStatus() == 403) {
                 log.warn("{} 经代理 {}:{} 返回 403，换代理重试({}/{})", tag, proxy[0], proxy[1], i + 1, retry);
                 response.close();

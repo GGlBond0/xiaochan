@@ -51,8 +51,8 @@
 
     </appender>
 
-    <!-- 设置根日志记录器的级别和Appender -->
-    <root level="DEBUG">
+    <!-- 设置根日志记录器的级别和Appender（INFO：避免 DEBUG 下 MyBatis 全量打印含敏感参数的 SQL） -->
+    <root level="INFO">
         <appender-ref ref="CONSOLE" />
         <appender-ref ref="INFO_FILE" />
         <appender-ref ref="ERROR_FILE" />
