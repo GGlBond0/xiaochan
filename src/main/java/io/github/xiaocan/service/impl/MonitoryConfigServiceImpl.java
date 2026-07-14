@@ -13,6 +13,7 @@ import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.enums.MonitorTypeEnums;
 import io.github.xiaocan.model.vo.NotifyConfigVO;
+import io.github.xiaocan.service.LoginStateService;
 import io.github.xiaocan.service.MonitoryConfigService;
 import io.github.xiaocan.service.UserService;
 import io.github.xiaocan.tasks.MonitorCronScheduler;
@@ -40,6 +41,8 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
     @Resource
     @Lazy
     private MonitorCronScheduler monitorCronScheduler;
+    @Resource
+    private LoginStateService loginStateService;
 
     @Override
     public List<NotifyConfigVO> listByUserId() {
@@ -114,6 +117,18 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
         }
 
         UserEntity user = userService.getByCurrentRequest();
+        // 自动抢单校验：开启时必须绑定属于当前用户的登录态
+        if (Boolean.TRUE.equals(dto.getAutoGrab())) {
+            if (dto.getGrabLoginStateId() == null) {
+                throw new BusinessException("开启自动抢单时必须选择抢单账号");
+            }
+            if (loginStateService.getEntity(dto.getGrabLoginStateId()) == null) {
+                throw new BusinessException("所选抢单账号不存在或无权使用");
+            }
+        } else {
+            // 未开启自动抢单：清空登录态绑定，避免脏数据
+            dto.setGrabLoginStateId(null);
+        }
         MonitorConfigEntity entity;
         if (dto.getId() != null) {
             entity = getById(dto.getId());

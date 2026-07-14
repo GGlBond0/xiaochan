@@ -60,4 +60,13 @@ public class monitorConfigDTO {
     @Valid
     private StoreKeywordExtNotifyConfig storeKeywordExtNotifyConfig;
 
+    /**
+     * 命中后是否自动建立抢单任务
+     */
+    private Boolean autoGrab;
+    /**
+     * 自动抢单所用登录态id，指向 login_state.id（autoGrab=true 时必填）
+     */
+    private Integer grabLoginStateId;
+
 }

@@ -41,6 +41,8 @@ public class BaseTask {
     private UserService userService;
     @Resource
     private PushService pushService;
+    @Resource
+    private AutoGrabService autoGrabService;
 
 
     void runSingle(MonitorConfigEntity notifyConfig) {
@@ -106,6 +108,8 @@ public class BaseTask {
             afterSuccess(notifyConfig, availableStores);
             //通知
             sendMessage(notifyConfig, availableStores, location);
+            // 监控命中后自动建立抢单任务（仅开启 autoGrab 的配置；AutoGrabService 内部按美团/防重/登录态/时间门禁）
+            triggerAutoGrab(notifyConfig, availableStores);
         }catch (Exception e){
             log.error("执行异常 type {} config id is {}", notifyConfig.getType(), notifyConfig.getId(), e);
             execHistory.setSuccess(false);
@@ -142,6 +146,22 @@ public class BaseTask {
      */
     protected void afterSuccess(MonitorConfigEntity notifyConfig, List<StoreInfo> availableStores){
         //默认为空
+    }
+
+    /**
+     * 监控命中后按配置自动建立抢单任务。对每个命中门店尝试建任务，
+     * 单个失败不阻断主流程（通知已发出）。
+     */
+    private void triggerAutoGrab(MonitorConfigEntity notifyConfig, List<StoreInfo> availableStores) {
+        if (!Boolean.TRUE.equals(notifyConfig.getAutoGrab())) return;
+        for (StoreInfo store : availableStores) {
+            try {
+                autoGrabService.tryCreateFromMonitor(notifyConfig, store);
+            } catch (Exception e) {
+                log.warn("自动抢单建任务异常 configId={}, promotionId={}: {}",
+                        notifyConfig.getId(), store.getPromotionId(), e.getMessage());
+            }
+        }
     }
 
     private void savePushedHistory(MonitorConfigEntity notifyConfig, List<StoreInfo> storeInfos){

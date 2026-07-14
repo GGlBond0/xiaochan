@@ -57,4 +57,12 @@ public class NotifyConfigVO {
      * 状态
      */
     private MonitorConfigStatusEnums status;
+    /**
+     * 命中后是否自动建立抢单任务
+     */
+    private Boolean autoGrab;
+    /**
+     * 自动抢单所用登录态id，指向 login_state.id
+     */
+    private Integer grabLoginStateId;
 }

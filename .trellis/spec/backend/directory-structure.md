@@ -40,6 +40,7 @@ src/main/java/io/github/xiaocan/
 - 跨实体的领域配置对象（如 `*ExtNotifyConfig`）放 `model/` 根包下，非 dto/vo/entity。
 - 外部 HTTP 调用统一放 `http/`，**非 Spring bean**，直接 `new` 或静态方法使用。
 - 定时任务放 `tasks/`，继承 `BaseTask`（模板方法：`runSingle` 骨架，子类覆写 `fetchStoreInfos`/`filterStoreInfos`/`afterSuccess`）。
+- **BaseTask.runSingle 是所有监控类型(STORE_ACTIVITY/STORE_KEYWORD/MINIMUM_PAY)的统一执行骨架**：`StoreTask`/`MinimumPayService` 都走 `runSingle`，所以"监控命中后的后处理"（如推送、自动抢单）只需在 `runSingle` 一处接入即全覆盖三种类型，无需改每个子类。新增命中后逻辑在 `sendMessage` 之后调即可，外层 try/catch 已隔离。
 
 ---
 
@@ -65,4 +66,5 @@ src/main/java/io/github/xiaocan/
 
 - 标准分层范例：`LocationController` → `LocationService`/`LocationServiceImpl` → `LocationMapper` → `LocationEntity`，DTO `LocationDTO`，VO `LocationVO`。
 - 调度任务范例：`MonitorCronScheduler`（动态 cron）+ `BaseTask`/`StoreTask`/`MinimumPayService`（模板方法任务）。
+- 跨子系统桥接范例：`AutoGrabService`（监控命中 → 自动建抢单任务）——在 `BaseTask.runSingle` 命中后接入，组装 `GrabConfigEntity` 并 `GrabCronScheduler.refresh` 注册调度，连接"监控"与"抢单"两个独立子系统而不耦合各自内部逻辑。
 - 外部 HTTP 范例：`XiaochanHttp`（上游小蚕网关，经 `ProxyHolder` 代理）。

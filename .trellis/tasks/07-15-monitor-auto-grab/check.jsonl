@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查 AutoGrabService 是否违反禁止模式、是否有重复逻辑（应复用 GrabServiceImpl 默认值约定而非重抄）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "检查触发点 try/catch 是否吞掉应上抛的错误、边界处理是否符合约定"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "检查跳过(防重/过期/非美团)日志级别与结构化字段是否合规"}
+{"file": ".trellis/spec/backend/push-routing.md", "reason": "检查登录态过期提醒复用 PushService 收口、是否绕过按地址路由多spt约定"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "检查是否重复实现时间解析/防重/默认值，应复用既有 helper"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "前端表单开关+账号下拉的组件写法校验依据"}
+{"file": "src/main/java/io/github/xiaocan/service/impl/MonitoryConfigServiceImpl.java", "reason": "校验段 autoGrab=true 时 grabLoginStateId 必填/归属校验是否正确"}
+{"file": "src/main/java/io/github/xiaocan/service/impl/AutoGrabServiceImpl.java", "reason": "核心建任务流程对照 design.md 流程逐项核查（门禁/防重/登录态/时间分支/组装/注册/history）"}

@@ -48,6 +48,17 @@ ORM 用 MyBatis-Plus 3.5.9（`mybatis-plus-spring-boot3-starter`）+ MySQL（`my
 - 事务：service 写操作加 `@Transactional(rollbackFor = Exception.class)`（见 `LocationServiceImpl`）。
 - JDBC URL 必须含 `allowPublicKeyRetrieval=true`，否则 MySQL 重启后 caching_sha2 缓存清空会导致连接失败（事故教训，见 `application.yaml`）。
 - 跨表关联：本项目**不用**联表查询，用多次查询 + 内存组装。
+- **当天去重模式**：定时/触发类任务要"同一业务对象一天只处理一次"时，用 `apply("DATE(create_time) = CURDATE()")` 配合 `lambdaQuery().eq(...).count() > 0` 判断。例：`AutoGrabServiceImpl` 防重 `grab_config` 同 `user_id + promotion_id + 当天 + ENABLE` 已存在则跳过，避免监控每轮命中重复建任务。依赖表的 `create_time` 字段（MP 自动填充）。
+
+---
+
+## Convention: 监控配置自动抢单字段
+
+`monitor_config` 新增两列（2026-07-15）：
+- `auto_grab tinyint(1) DEFAULT 0`：命中后是否自动建抢单任务。
+- `grab_login_state_id int NULL`：自动抢单所用登录态，逻辑外键指向 `login_state.id`（统一登录态池，抢单/霸王餐共用）。
+
+`autoGrab=false` 时 `grab_login_state_id` 在 `MonitoryConfigServiceImpl.addUpdateConfig` 里强制置 null（避免脏数据）；`copyProperties(dto, entity)` 在置 null 之后执行，不会反向覆盖。仅在美团(type=1)活动命中时建任务（决策A，上游 `grabPromotionQuota` 的 `store_platform` 写死 1）。
 
 ---
 

@@ -350,3 +350,11 @@ FROM `lottery_auth`;
 --   DROP TABLE IF EXISTS lottery_auth;
 -- 切勿在迁移前 DROP，否则 INSERT...SELECT 会丢数据。
 -- ============================
+
+
+-- ============================
+-- 监控配置自动抢单字段 (2026-07-15, task 07-15-monitor-auto-grab)
+-- ============================
+ALTER TABLE `monitor_config`
+  ADD COLUMN `auto_grab` tinyint(1) NOT NULL DEFAULT 0 COMMENT '命中后自动建抢单任务: 0-否, 1-是',
+  ADD COLUMN `grab_login_state_id` int NULL DEFAULT NULL COMMENT '自动抢单所用登录态id, 指向 login_state.id';

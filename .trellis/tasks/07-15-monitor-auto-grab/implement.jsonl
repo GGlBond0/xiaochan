@@ -1,0 +1,11 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "新增 monitor_config 两列的 DDL/ORM 约定（逻辑外键、字段命名、迁移写法）"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "AutoGrabService 在监控执行体内 try/catch 吞异常的边界与日志策略"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "防重跳过/过期跳过/建任务 warn 日志的级别与格式约定"}
+{"file": ".trellis/spec/backend/xiaochan-rpc-contract.md", "reason": "抢单/监控命中均走小蚕RPC网关，StoreInfo.promotionId 与 grabPromotionQuota 的 promotion_id 同源契约"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本特性跨 DB/Service/调度/前端四层，建任务字段在层间传递需防 cast/字段错位"}
+{"file": "ddl.sql", "reason": "monitor_config / grab_config / login_state / grab_history 现有 DDL，新增列与防重查询字段核对依据"}
+{"file": "src/main/java/io/github/xiaocan/service/impl/GrabServiceImpl.java", "reason": "addUpdateConfig 默认值约定与 doGrab 登录态/饭票前置校验，AutoGrabService 组装任务复用此模板"}
+{"file": "src/main/java/io/github/xiaocan/tasks/StoreTask.java", "reason": "STORE_ACTIVITY/STORE_KEYWORD 命中推送点，AutoGrabService 触发接入位置之一"}
+{"file": "src/main/java/io/github/xiaocan/tasks/MinimumPayService.java", "reason": "MINIMUM_PAY 命中推送点，AutoGrabService 触发接入位置之二"}
+{"file": "src/main/java/io/github/xiaocan/tasks/GrabCronScheduler.java", "reason": "建任务后 refresh(id) 注册一次性/定时调度的现成机制"}
+{"file": "src/main/java/io/github/xiaocan/model/StoreInfo.java", "reason": "命中数据载体：promotionId/startTime/endTime/type 字段，建任务取值来源"}
