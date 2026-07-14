@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 16
+- **Total Sessions**: 17
 - **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~580 | Active |
+| `journal-1.md` | ~614 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 17 | 2026-07-15 | 监控配置自动建立抢单任务(后端+前端+DB+部署) | `06944e9`, `ca2a8cf` | `main` |
 | 16 | 2026-07-15 | 霸王餐刷任务执行日志明细(SKIPPED/OK/FAIL) | `64dc3b4`, `b5feef2` | `main` |
 | 15 | 2026-07-15 | 登录态统一为 login_state 单池 + 生产部署冒烟 | `9e13d2e`, `6b38b6b` | `main` |
 | 14 | 2026-07-15 | 霸王餐抽奖刷任务改App(Android)登录态 | `76e4782` | `main` |
