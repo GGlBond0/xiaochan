@@ -42,6 +42,7 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
     @Lazy
     private MonitorCronScheduler monitorCronScheduler;
     @Resource
+    @Lazy
     private LoginStateService loginStateService;
 
     @Override
