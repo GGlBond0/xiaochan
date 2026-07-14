@@ -174,3 +174,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 代理IP池配置可视化设置页（跨前后端，已部署生产）
+
+**Date**: 2026-07-14
+**Task**: 代理IP池配置可视化设置页（跨前后端，已部署生产）
+**Branch**: `main`
+
+### Summary
+
+将后端 ProxyHolder 代理配置从 systemd EnvironmentFile 改为数据库 proxy_config 表（全局单份 id=1），运行时读 DB + 内存快照，保存经 /api/proxy/config 即时生效无需重启，环境变量降级为兜底默认值。后端新增 ProxyConfig Entity/DTO/VO/Mapper/Service/Controller，ProxyHolder 方法签名不变、HTTP 拉取移出锁外、解析异常整体兜底。前端新增 /settings 路由与 NavBar 顶部入口及 SettingsView 表单页。独立审查修复 4 项隐患（P1-P4）。本机 mvn package + npm run build，部署到生产 121.91.175.192：建表、替 jar、部署 dist、重启服务，端到端 GET/PUT/回显/日志验证通过，两个 fork 已 push main。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dbb06e4` | (see git log) |
+| `a3fa03c` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
