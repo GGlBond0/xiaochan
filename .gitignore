@@ -62,3 +62,5 @@ logs/
 # 抢单重放验证（含真实登录态/JWT，严禁入库）
 src/test/java/io/github/xiaochan/GrabReplayTest.java
 .trellis/tasks/07-14-grab-promotion/research/
+# 本机 MCP 工具配置(mitmproxy-mcp)，机器特定，不提交
+.mcp.json
