@@ -306,3 +306,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: 卡券查询bug修复:饭票按name判断+登录态去重+自用免登录
+
+**Date**: 2026-07-14
+**Task**: 卡券查询bug修复:饭票按name判断+登录态去重+自用免登录
+**Branch**: `main`
+
+### Summary
+
+连续修复多spt推送上线后的几个遗留bug:(1)登录态重复录入-GrabServiceImpl.saveLoginState按(userId,xcUserId)去重,已存在则更新而非新增,清理生产重复行(2)自用免登录-前端App.vue写死固定token自动带入主站不弹登录窗(前端commit 6543439)(3)卡券类型标签错误-超前抢单券误显示超抢券、饭票显示typenull,cardTypeLabel补全映射+未知回退name(前端commit ee2d8c1)(4)饭票cardId随账号不固定(183=1,153=5),原写死cardId==1导致153账号饭票计数0+抢单被误拦,countCards/countTicketByAuth改为按name==饭票判断。全部本地构建部署上线验证通过。记忆新增ticket-cardid-not-fixed。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c51f9b5` | (see git log) |
+| `b1488ee` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
