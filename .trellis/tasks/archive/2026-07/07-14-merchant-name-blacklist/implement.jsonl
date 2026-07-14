@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "新增表/Entity/Mapper/Service 七件套需遵循 MyBatis-Plus 约定：@TableName/@TableId(AUTO)/@TableLogic、lambdaQuery、ddl.sql 手工维护、命名下划线、不加 DTO/VO 持久化注解"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Controller 不写 try/catch、Service throw BusinessException、401 用 code=401、定时任务复用方法不能依赖 HTTP 上下文（Holder/MerchantBlacklistService 运行时被定时任务调用需显式参数）"}
+{"file": ".trellis/spec/backend/push-routing.md", "reason": "抢单命中黑名单需推失败通知，必须走 PushService.pushToUser/pushToLocation 收口，禁止直接 MessageHttp.sendMessage；定时任务线程安全调用"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "新增代码须符合既有质量约定，避免技术债（如 DTO/VO 误带持久化注解）"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "SettingsView 新增黑名单区块需遵循前端组件写法（el-form/el-switch/el-input textarea + 独立 reactive 表单 + load/save 模式）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "前端新增表单字段需符合 TS 类型约定"}
+{"file": ".trellis/tasks/07-14-merchant-name-blacklist/design.md", "reason": "技术设计：表结构、Holder 匹配算法、七件套、三处过滤插入点"}
