@@ -31,7 +31,7 @@ String id = silkId == null ? "0" : String.valueOf(silkId);
 return uuid.substring(0, 4) + id + uuid.substring(4, 20 - id.length() - 4);
 ```
 > `generateUuid()` 模仿原始 JS：固定第14位=`4`、第19位变体位、8/13/18/23 为 `-`。
-> App 版 X-Nami 每次请求随机生成，**不存数据库**（mini 版曾存 `lottery_auth.nami`，已删该列）。
+> App 版 X-Nami 每次请求随机生成，**不存数据库**（mini 版曾存 `lottery_auth.nami`，已删该列）。合并后 `login_state.nami` 仅抢单登录态可选留底，霸王餐登录态该列为空。
 
 ### HTTP 调用入口
 - `XiaochanHttp`（Android 登录态，抢单/卡券）：`new XiaochanHttp()` 后调 public 实例方法（`grabPromotionQuota`/`getUserCardList`/`getStorePromotionDetail`/`searchAddress`...），内部走 private `postWithRes`（无登录态）或 `postWithResAuth`（带 `GrabAuth`），经 `executeWithProxy` 复用 `ProxyHolder` 代理/403重试。端点 `gw`。
@@ -54,7 +54,7 @@ return uuid.substring(0, 4) + id + uuid.substring(4, 20 - id.length() - 4);
 | `x-Teemo` | 是 | silk_id |
 | `X-Vayne` | 可空 | user_id |
 | `X-Sivir` | 是 | **Android 登录 JWT，必填** |
-| `x-City` | 可空 | 城市码，如 `440111`（从抓包解析存 `lottery_auth.city_code`） |
+| `x-City` | 可空 | 城市码，如 `440111`（从抓包解析存 `login_state.city_code`，霸王餐用；抢单登录态该字段为空，`LotteryHttp` 对 null 容错不加此 header） |
 | `User-Agent` | 是 | `XC;Android;3.18.3;`（原生接口） |
 | `Content-Type` | 是 | `application/json; charset=utf-8` |
 | **`appid`** | **无** | App 版**无 appid header**（mini 版有 `appid:20`） |
@@ -187,21 +187,23 @@ headers.put("X-Sivir", auth.getSivir());  // 必填
 
 ---
 
-## Design Decision: App 登录态独立表（lottery_auth），与 grab_login_state 物理隔离
+## Design Decision: 登录态统一池 login_state（2026-07-15 合并）
 
-**Context**（2026-07-15 更新）：抽奖刷任务从小程序（mini）登录态改为小蚕 App（Android）登录态。App 登录态带 `X-Sivir` JWT，与抢单的 `GrabAuth` 同为 Android 来源，但用途不同。
+**Context**：抢单与霸王餐刷任务用的是**同一种**小蚕 App 账号登录态（一组抓包 header：X-Sivir JWT / X-Session-Id / X-Vayne / X-Teemo / X-Nami），历史上却拆成 `grab_login_state` 与 `lottery_auth` 两表、两套字段名（`xc_sivir` vs `sivir` 等）、两套重复解析逻辑。这是项目混乱根源。2026-07-15 task `07-15-login-state-unified-mgmt` 合并为单池 `login_state`。
 
-**Decision**：**不动 `GrabAuth`/`grab_login_state`/`XiaochanHttp`**，`lottery_auth` 表重建为 App 登录态（加 `sivir`/`city_code` 列、删 `nami` 列），`LotteryAuth` POJO 加 `sivir`/`cityCode`，`isComplete()` 要求 `silkId+sessionId+sivir`。`LotteryHttp` 切 `gwh` + Android header + body 无 app_id。
+**Decision**：新建 `login_state` 单表（统一字段 `sivir/session_id/user_vayne/silk_id/nami/city_code/location_id/expire_at/raw_headers`，全部业务专属字段可空），抢单/霸王餐/卡券查询都从这一池用选择框引用。`LoginStateService` 合并两处解析逻辑，提供 `getEntity`（HTTP 上下文）/`getEntityByIdAndUser`（定时任务无 HTTP 上下文）/`toGrabAuth`/`toLotteryAuth`。前端新增 `/login-state` 管理页，`SettingsView` 霸王餐录入段下线改选已有登录态。
 
-**Why 独立表不复用 grab_login_state**：
-1. `GrabAuth.isComplete()` 校验 `sivir+userId+sessionId`，改其语义会触动抢单所有调用点，风险远大于新建。
-2. 抽奖登录态字段（`city_code`、`raw_headers` 留底）与抢单登录态不同。
-3. 独立表方便项目其它部分按需复用 App 登录态，互不影响。
+**迁移关键**：抢单行 `INSERT INTO login_state(id,...) SELECT id,... FROM grab_login_state` **保持原 id 不变**，使 `grab_config.login_state_id` 无需改值即继续指向新表；霸王餐行新分配 id（无外部引用）。`GrabJwtExpireTask` 改扫 `login_state`（覆盖抢单+霸王餐）。`LotteryHttp` 对 `cityCode==null` 容错（不加 x-City header），故霸王餐可用迁入的抢单登录态。
 
-**Why 改造复用而非新建第二套 HTTP**（路线 A vs B）：
-App 版接口名/body/签名/type 映射与 mini **完全一致**，只差端点(gwh)/header(Android)/body(无app_id)。直接改 `LotteryHttp` 比新建 `LotteryHttpApp` 更省、无维护双套负担。mini 版已废弃删除（DDL `DROP IF EXISTS` 重建）。
+**Why 推翻原"独立表物理隔离"决策**：原决策（见下方历史段）以"风险隔离"为由拆两表，但两套表+解析是重复维护负担，且 `LotteryAuth` 注释本就写"方便复用"却从未复用。合并后登录态一处录入、多处选择框引用，才真正减少混乱。
 
-**How to extend**：未来若新增其它小蚕登录态来源，优先新建独立 `XxxAuth` + 表 + `Http`，复用 `XiaochanHttp.getAshe/getNami` 签名算法，而非改既有 auth 类。
+**How to extend**：未来若新增其它小蚕登录态来源（新端点/header 组合），优先在 `login_state` 加可空业务专属列 + 在 `LoginStateService` 加 `toXxxAuth` 适配方法，而非新建独立表。复用 `XiaochanHttp.getAshe/getNami` 签名算法。
+
+---
+
+## 历史：App 登录态独立表（lottery_auth，已被 2026-07-15 合并取代）
+
+> **2026-07-15 前**的决策曾为"独立表物理隔离"：`lottery_auth` 与 `grab_login_state` 各自独立表，`LotteryAuth` POJO `isComplete()` 要求 `silkId+sessionId+sivir`，`LotteryHttp` 走 `gwh` + Android header + body 无 app_id。**该决策已被上方"登录态统一池"取代**——两表已合并入 `login_state`，旧表/旧接口保留至验证通过后删除（阶段3）。`LotteryHttp` 的端点/header/body 契约**不变**，只是登录态来源从 `lottery_auth` 改读 `login_state`。保留此段作历史对照。
 
 ---
 

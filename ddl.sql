@@ -299,3 +299,44 @@ CREATE TABLE `lottery_auth`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id` (`user_id`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '小蚕霸王餐刷任务 App(Android) 登录态(多组)' ROW_FORMAT = Dynamic;
+
+
+-- ============================
+-- 2026年7月15日 登录态统一：grab_login_state + lottery_auth 合并为 login_state
+-- 同一种东西(小蚕App账号登录态)历史上拆两表两套字段，本次合并为单池。
+-- 旧表保留(回滚=改代码读回旧表)，阶段3验证通过后再 DROP。
+-- ============================
+
+DROP TABLE IF EXISTS `login_state`;
+CREATE TABLE `login_state` (
+  `id`          INT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id`     INT NOT NULL COMMENT '系统用户ID',
+  `name`        VARCHAR(64) NOT NULL COMMENT '别名,如 主账号/小号',
+  `sivir`       VARCHAR(800) NULL DEFAULT NULL COMMENT 'X-Sivir JWT(登录态,必填)',
+  `session_id`  VARCHAR(64) NULL DEFAULT NULL COMMENT 'X-Session-Id',
+  `user_vayne`  INT NULL DEFAULT NULL COMMENT '小蚕用户id(X-Vayne/JWT.UserId)',
+  `silk_id`     INT NULL DEFAULT 0 COMMENT 'silk_id(请求体+X-Teemo)',
+  `nami`        VARCHAR(32) NULL DEFAULT NULL COMMENT 'X-Nami(可选,默认随机)',
+  `city_code`   INT NULL DEFAULT NULL COMMENT 'x-City 城市码(霸王餐用,可空)',
+  `location_id` BIGINT NULL DEFAULT NULL COMMENT '所属地址id(抢单可选绑定,老记录/霸王餐留空)',
+  `expire_at`   DATETIME NULL DEFAULT NULL COMMENT 'JWT过期时间(解析exp)',
+  `raw_headers` TEXT NULL DEFAULT NULL COMMENT '录入的原始抓包header(留底)',
+  `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted`     TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+  PRIMARY KEY (`id`),
+  INDEX `idx_user_id` (`user_id`),
+  INDEX `idx_location_id` (`location_id`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '小蚕App账号登录态统一池';
+
+-- 迁移：抢单行保持原 id 不变(grab_config.login_state_id 无需改值即可继续指向新表)
+INSERT INTO `login_state` (`id`,`user_id`,`name`,`sivir`,`session_id`,`user_vayne`,`silk_id`,`nami`,`location_id`,`expire_at`,`create_time`,`update_time`,`deleted`)
+SELECT `id`,`user_id`,`name`,`xc_sivir`,`xc_session_id`,`xc_user_id`,`silk_id`,`xc_nami`,`location_id`,`expire_at`,`create_time`,`update_time`,`deleted`
+FROM `grab_login_state`;
+
+-- 迁移：霸王餐行新分配 id(无 grab_config 引用，刷任务按前端临时传 authId，id 变化无影响)
+INSERT INTO `login_state` (`user_id`,`name`,`sivir`,`session_id`,`user_vayne`,`silk_id`,`city_code`,`raw_headers`,`create_time`,`update_time`,`deleted`)
+SELECT `user_id`,`name`,`sivir`,`session_id`,`user_vayne`,`silk_id`,`city_code`,`raw_headers`,`create_time`,`update_time`,`deleted`
+FROM `lottery_auth`;
+
+-- 回滚：DROP TABLE login_state; (旧表 grab_login_state / lottery_auth 未删，代码 revert 即恢复)

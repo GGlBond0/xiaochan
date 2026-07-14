@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/xiaocan-rpc-contract.md", "reason": "核对合并后 GrabAuth/LotteryAuth 仍带齐 X-Sivir 等 header，抢单/卡券/刷任务调用契约不变"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "核对迁移 SQL 幂等/回滚注释/逻辑删除/索引约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "核对无禁止模式、无重复解析逻辑残留、命名统一"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "核对缺失字段/JWT过期/无权操作错误抛法与原行为一致"}
+{"file": ".trellis/spec/backend/push-routing.md", "reason": "核对 JWT 过期提醒推送路由未被改扫新表破坏"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核对前端新页/下拉/字段适配符合前端代码标准"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对 LoginStateView 组件结构与既有 Element Plus 页面一致"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对登录态列表在前端各页的获取/缓存方式"}

@@ -12,6 +12,7 @@ import io.github.xiaocan.model.entity.GrabConfigEntity;
 import io.github.xiaocan.model.entity.GrabHistoryEntity;
 import io.github.xiaocan.model.entity.GrabLoginStateEntity;
 import io.github.xiaocan.model.entity.LocationEntity;
+import io.github.xiaocan.model.entity.LoginStateEntity;
 import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.StoreInfo;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
@@ -66,6 +67,8 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     private io.github.xiaocan.mapper.GrabLoginStateMapper grabLoginStateMapper;
     @Resource
     private io.github.xiaocan.mapper.GrabHistoryMapper grabHistoryMapper;
+    @Resource
+    private io.github.xiaocan.service.LoginStateService loginStateService;
 
     /** 抓包 header 行解析：Key: Value（含大小写变体如 X-Sivir / x-Teemo） */
     private static final Pattern HEADER_LINE = Pattern.compile("(?i)^\\s*\"?([A-Za-z-]+)\"?\\s*[:：]\\s*\"?(.*?)\"?\\s*$");
@@ -266,10 +269,10 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             dto.setCron(null);
         }
         UserEntity user = userService.getByCurrentRequest();
-        // 校验登录态归属
+        // 校验登录态归属（统一池 login_state）
         if (dto.getLoginStateId() != null) {
-            GrabLoginStateEntity ls = grabLoginStateMapper.selectById(dto.getLoginStateId());
-            if (ls == null || !ls.getUserId().equals(user.getId())) {
+            LoginStateEntity ls = loginStateService.getEntity(dto.getLoginStateId());
+            if (ls == null) {
                 throw new BusinessException("登录态不存在或无权使用");
             }
         }
@@ -350,10 +353,16 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setMsg("用户不存在");
             return result;
         }
-        // 登录态：按 config.loginStateId 取（多组）
-        GrabLoginStateEntity loginState = config.getLoginStateId() == null ? null
-                : grabLoginStateMapper.selectById(config.getLoginStateId());
-        GrabAuth auth = GrabAuth.from(loginState);
+        // 登录态：按 config.loginStateId 取（统一池 login_state）
+        // doGrab 会被定时任务调用（无 HTTP 请求上下文），用显式 userId 重载避免 getByCurrentRequest 抛错
+        LoginStateEntity loginState = loginStateService.getEntityByIdAndUser(config.getLoginStateId(), user.getId());
+        GrabAuth auth = loginState == null ? null : GrabAuth.builder()
+                .sivir(loginState.getSivir())
+                .userId(loginState.getUserVayne())
+                .sessionId(loginState.getSessionId())
+                .nami(loginState.getNami())
+                .silkId(loginState.getSilkId())
+                .build();
         if (auth == null || !auth.isComplete()) {
             result.setSuccess(false);
             result.setCode(-1);
@@ -496,15 +505,20 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     @Override
     public List<GrabCardVO> listCards(Integer loginStateId, Integer number, Integer offset, Integer status) {
         UserEntity user = userService.getByCurrentRequest();
-        GrabLoginStateEntity loginState = loginStateId == null ? null
-                : grabLoginStateMapper.selectById(loginStateId);
+        LoginStateEntity loginState = loginStateService.getEntity(loginStateId);
         if (loginState == null || !loginState.getUserId().equals(user.getId())) {
             throw new BusinessException("登录态不存在或无权使用");
         }
         if (loginState.getExpireAt() != null && loginState.getExpireAt().isBefore(LocalDateTime.now())) {
             throw new BusinessException("该登录态 JWT 已过期，请更新");
         }
-        GrabAuth auth = GrabAuth.from(loginState);
+        GrabAuth auth = GrabAuth.builder()
+                .sivir(loginState.getSivir())
+                .userId(loginState.getUserVayne())
+                .sessionId(loginState.getSessionId())
+                .nami(loginState.getNami())
+                .silkId(loginState.getSilkId())
+                .build();
         if (auth == null || !auth.isComplete()) {
             throw new BusinessException("登录态不完整");
         }
@@ -629,15 +643,20 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     /** 复用 listCards 的登录态校验逻辑，返回 GrabAuth */
     private GrabAuth resolveAuth(Integer loginStateId) {
         UserEntity user = userService.getByCurrentRequest();
-        GrabLoginStateEntity loginState = loginStateId == null ? null
-                : grabLoginStateMapper.selectById(loginStateId);
+        LoginStateEntity loginState = loginStateService.getEntity(loginStateId);
         if (loginState == null || !loginState.getUserId().equals(user.getId())) {
             throw new BusinessException("登录态不存在或无权使用");
         }
         if (loginState.getExpireAt() != null && loginState.getExpireAt().isBefore(LocalDateTime.now())) {
             throw new BusinessException("该登录态 JWT 已过期，请更新");
         }
-        GrabAuth auth = GrabAuth.from(loginState);
+        GrabAuth auth = GrabAuth.builder()
+                .sivir(loginState.getSivir())
+                .userId(loginState.getUserVayne())
+                .sessionId(loginState.getSessionId())
+                .nami(loginState.getNami())
+                .silkId(loginState.getSilkId())
+                .build();
         if (auth == null || !auth.isComplete()) {
             throw new BusinessException("登录态不完整");
         }

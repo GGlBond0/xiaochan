@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/xiaocan-rpc-contract.md", "reason": "登录态字段语义权威来源：X-Sivir/X-Session-Id/X-Vayne/X-Teemo/X-Nami 含义、mini已废弃、App(Android)登录态为唯一来源——合并表字段命名与解析必须对齐此契约"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "建 login_state 表与迁移 SQL 需遵循项目 ORM/DDL/逻辑删除/迁移约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新 Entity/Mapper/Service/Controller 放置位置与命名约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "登录态校验缺失字段、JWT 过期、无权操作等 BusinessException 用法"}
+{"file": ".trellis/spec/backend/push-routing.md", "reason": "GrabJwtExpireTask 改扫新表后推送提醒路由(按地址多spt/user.spt兜底)不能破"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "解析失败/迁移/刷任务日志级别约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "禁止模式与代码标准，合并重复解析逻辑时遵守"}

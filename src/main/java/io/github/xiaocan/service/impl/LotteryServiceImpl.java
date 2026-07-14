@@ -69,6 +69,8 @@ public class LotteryServiceImpl implements LotteryService {
     @Resource
     private LotteryAuthMapper lotteryAuthMapper;
     @Resource
+    private io.github.xiaocan.service.LoginStateService loginStateService;
+    @Resource
     private UserService userService;
 
     @Override
@@ -196,7 +198,7 @@ public class LotteryServiceImpl implements LotteryService {
     @Override
     public LotteryTaskResultVO runTask(Integer authId) {
         UserEntity user = userService.getByCurrentRequest();
-        LotteryAuthEntity entity = lotteryAuthMapper.selectById(authId);
+        io.github.xiaocan.model.entity.LoginStateEntity entity = loginStateService.getEntity(authId);
         if (entity == null || !entity.getUserId().equals(user.getId())) {
             throw new BusinessException("无权操作该登录态");
         }

@@ -1,8 +1,8 @@
 package io.github.xiaocan.tasks;
 
 import com.alibaba.fastjson2.JSONObject;
-import io.github.xiaocan.mapper.GrabLoginStateMapper;
-import io.github.xiaocan.model.entity.GrabLoginStateEntity;
+import io.github.xiaocan.mapper.LoginStateMapper;
+import io.github.xiaocan.model.entity.LoginStateEntity;
 import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.service.PushService;
 import io.github.xiaocan.service.UserService;
@@ -20,7 +20,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 抢单登录态 JWT 过期检查：每天 9:07 扫描 grab_login_state，临过期/已过期推送提醒，按 id 去重。
+ * 登录态 JWT 过期检查：每天 9:07 扫描统一池 login_state，临过期/已过期推送提醒，按 id 去重。
+ * 覆盖抢单与霸王餐登录态（已合并为单池）。
  */
 @Slf4j
 @Component
@@ -30,7 +31,7 @@ public class GrabJwtExpireTask {
     private static final long EXPIRE_THRESHOLD_SECONDS = 1 * 24 * 3600L;
 
     @Resource
-    private GrabLoginStateMapper grabLoginStateMapper;
+    private LoginStateMapper loginStateMapper;
     @Resource
     private UserService userService;
     @Resource
@@ -41,16 +42,16 @@ public class GrabJwtExpireTask {
 
     @Scheduled(cron = "0 7 9 * * ?")
     public void checkJwtExpire() {
-        List<GrabLoginStateEntity> list;
+        List<LoginStateEntity> list;
         try {
-            list = grabLoginStateMapper.selectList(null);
+            list = loginStateMapper.selectList(null);
         } catch (Exception e) {
             log.error("查询登录态列表失败", e);
             return;
         }
         if (list == null || list.isEmpty()) return;
         long nowSec = System.currentTimeMillis() / 1000;
-        for (GrabLoginStateEntity state : list) {
+        for (LoginStateEntity state : list) {
             try {
                 checkOne(state, nowSec);
             } catch (Exception e) {
@@ -59,9 +60,9 @@ public class GrabJwtExpireTask {
         }
     }
 
-    private void checkOne(GrabLoginStateEntity state, long nowSec) {
+    private void checkOne(LoginStateEntity state, long nowSec) {
         // 用记录里的 expireAt（录入时已解析），无则再解析
-        Long exp = state.getExpireAt() == null ? parseJwtExp(state.getXcSivir())
+        Long exp = state.getExpireAt() == null ? parseJwtExp(state.getSivir())
                 : state.getExpireAt().atZone(java.time.ZoneId.systemDefault()).toEpochSecond();
         if (exp == null) return;
         UserEntity user = userService.getById(state.getUserId());
@@ -75,22 +76,22 @@ public class GrabJwtExpireTask {
         if (reminded.get(state.getId()) != null && reminded.get(state.getId()).equals(expTime)) return;
         Long locationId = state.getLocationId();
         if (remain <= 0) {
-            push(state, user, locationId, "小蚕登录态已过期", "抢单登录态「" + state.getName() + "」(JWT)已过期，请重新抓包录入，否则无法自动抢单。");
+            push(state, user, locationId, "小蚕登录态已过期", "登录态「" + state.getName() + "」(JWT)已过期，请重新抓包录入，否则无法自动抢单/刷任务。");
         } else {
             long days = remain / 86400;
             push(state, user, locationId, "小蚕登录态即将过期",
-                    "抢单登录态「" + state.getName() + "」剩余约 " + days + " 天，过期时间 " + expTime
-                            + "。请及时重新抓包录入，避免自动抢单失效。");
+                    "登录态「" + state.getName() + "」剩余约 " + days + " 天，过期时间 " + expTime
+                            + "。请及时重新抓包录入，避免自动抢单/刷任务失效。");
         }
         reminded.put(state.getId(), expTime);
     }
 
-    private void push(GrabLoginStateEntity state, UserEntity user, Long locationId, String summary, String content) {
+    private void push(LoginStateEntity state, UserEntity user, Long locationId, String summary, String content) {
         try {
             if (locationId != null) {
                 pushService.pushToLocation(locationId, content, summary);
             } else {
-                // 老记录未绑地址：回退 user.spt
+                // 未绑地址（含霸王餐登录态）：回退 user.spt
                 pushService.pushToUser(user.getId(), content, summary);
             }
             log.info("已推送 JWT 过期提醒 stateId={}, locationId={}, summary={}", state.getId(), locationId, summary);
