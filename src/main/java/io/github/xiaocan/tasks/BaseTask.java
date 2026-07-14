@@ -1,13 +1,11 @@
 package io.github.xiaocan.tasks;
 
 import io.github.xiaocan.constant.StorePlatformEnum;
-import io.github.xiaocan.http.MessageHttp;
 import io.github.xiaocan.model.StoreInfo;
 import io.github.xiaocan.model.entity.TaskExecHistoryEntity;
 import io.github.xiaocan.model.entity.LocationEntity;
 import io.github.xiaocan.model.entity.MonitorConfigEntity;
 import io.github.xiaocan.model.entity.StorePushedHistoryEntity;
-import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.service.*;
 import jakarta.annotation.Resource;
@@ -41,6 +39,8 @@ public class BaseTask {
     private StorePushedHistoryService storePushedHistoryService;
     @Resource
     private UserService userService;
+    @Resource
+    private PushService pushService;
 
 
     void runSingle(MonitorConfigEntity notifyConfig) {
@@ -183,11 +183,10 @@ public class BaseTask {
         String body = storeInfos.stream()
                 .map(storeInfo -> buildMessage(storeInfo, locationEntity))
                 .collect(Collectors.joining("<br/><br/>"));
-        UserEntity userEntity = userService.getById(locationEntity.getUserId());
         try {
             log.info("发送消息:{}", body);
             String summary = buildSummary(notifyConfig, storeInfos, locationEntity);
-            MessageHttp.sendMessage(userEntity.getSpt(), body, summary);
+            pushService.pushToLocation(locationEntity.getId(), body, summary);
         }catch (Exception e){
             log.error("发送消息失败", e);
         }

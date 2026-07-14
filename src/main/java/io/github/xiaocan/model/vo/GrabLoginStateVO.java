@@ -16,4 +16,12 @@ public class GrabLoginStateVO {
     private LocalDateTime expireAt;
     private String expireStatus;
     private LocalDateTime updateTime;
+    /**
+     * 所属地址id(location.id)，可空
+     */
+    private Long locationId;
+    /**
+     * 所属地址名(地址页分组展示用)，可空
+     */
+    private String locationName;
 }

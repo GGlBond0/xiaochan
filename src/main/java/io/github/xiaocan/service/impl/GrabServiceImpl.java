@@ -5,7 +5,6 @@ import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import io.github.xiaocan.config.BusinessException;
 import io.github.xiaocan.http.GrabAuth;
-import io.github.xiaocan.http.MessageHttp;
 import io.github.xiaocan.http.XiaochanHttp;
 import io.github.xiaocan.mapper.GrabConfigMapper;
 import io.github.xiaocan.model.entity.GrabConfigEntity;
@@ -56,6 +55,8 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     private UserService userService;
     @Resource
     private LocationService locationService;
+    @Resource
+    private io.github.xiaocan.service.PushService pushService;
     private final XiaochanHttp xiaochanHttp = new XiaochanHttp();
     @Resource
     @Lazy
@@ -138,6 +139,15 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             entity = new GrabLoginStateEntity();
             entity.setUserId(user.getId());
         }
+        // 绑定地址校验：locationId 非空时必须属于当前用户
+        Long locationId = dto.getLocationId();
+        if (locationId != null) {
+            LocationEntity loc = locationService.getById(locationId);
+            if (loc == null || !loc.getUserId().equals(user.getId())) {
+                throw new BusinessException("无权绑定该地址");
+            }
+            entity.setLocationId(locationId);
+        }
         entity.setName(StringUtils.hasText(dto.getName()) ? dto.getName() : "账号" + (xcUserId == null ? "" : xcUserId));
         entity.setXcSivir(sivir);
         entity.setXcSessionId(sessionId);
@@ -168,6 +178,12 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<GrabLoginStateEntity>()
                         .eq(GrabLoginStateEntity::getUserId, uid)
                         .orderByDesc(GrabLoginStateEntity::getId));
+        // 内存组装地址名（不联表）：当前用户所有地址建 id->name map
+        java.util.Map<Long, String> locNameMap = new java.util.HashMap<>();
+        for (LocationEntity loc : locationService.list(new com.baomidou.mybatisplus.core.conditions.query
+                .LambdaQueryWrapper<LocationEntity>().eq(LocationEntity::getUserId, uid))) {
+            locNameMap.put(loc.getId(), loc.getName());
+        }
         LocalDateTime now = LocalDateTime.now();
         return list.stream().map(e -> {
             GrabLoginStateVO vo = new GrabLoginStateVO();
@@ -177,6 +193,10 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             vo.setSilkId(e.getSilkId());
             vo.setExpireAt(e.getExpireAt());
             vo.setUpdateTime(e.getUpdateTime());
+            vo.setLocationId(e.getLocationId());
+            if (e.getLocationId() != null) {
+                vo.setLocationName(locNameMap.get(e.getLocationId()));
+            }
             if (e.getExpireAt() == null) {
                 vo.setExpireStatus("未知");
             } else if (e.getExpireAt().isBefore(now)) {
@@ -343,7 +363,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setCode(-1);
             result.setMsg("饭票不足，请先领取");
             saveHistory(config, user.getId(), false, -1, "饭票不足，请先领取", null, 1, triggerType, null, null);
-            push(user, "抢单失败", "活动" + config.getPromotionId() + " 饭票不足，请先领取");
+            push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 饭票不足，请先领取");
             return result;
         }
         // 位置
@@ -409,17 +429,17 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                         .set(GrabConfigEntity::getStatus, MonitorConfigStatusEnums.DISABLE)
                         .update();
                 grabCronScheduler.cancel(config.getId());
-                push(user, "抢单成功", "活动" + config.getPromotionId() + " 抢到，订单号 " + orderId);
+                push(config, user, "抢单成功", "活动" + config.getPromotionId() + " 抢到，订单号 " + orderId);
                 break;
             }
             if (code != 4) {
-                push(user, "抢单失败", "活动" + config.getPromotionId() + " 失败：" + msg + "(code=" + code + ")");
+                push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 失败：" + msg + "(code=" + code + ")");
                 break;
             }
             if (attempt < maxRetry && retry) {
                 sleep(interval);
             } else {
-                push(user, "抢单失败", "活动" + config.getPromotionId() + " 重试" + maxRetry + "次仍为未开始/失败");
+                push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 重试" + maxRetry + "次仍为未开始/失败");
             }
         }
         if (finalResult == null) finalResult = fail(-1, "未知失败");
@@ -626,10 +646,14 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
         return null;
     }
 
-    private void push(UserEntity user, String summary, String body) {
+    private void push(GrabConfigEntity config, UserEntity user, String summary, String body) {
         try {
-            if (StringUtils.hasText(user.getSpt())) {
-                MessageHttp.sendMessage(user.getSpt(), body, summary);
+            Long locationId = config.getLocationId();
+            if (locationId != null) {
+                pushService.pushToLocation(locationId, body, summary);
+            } else {
+                // 老配置无地址：回退 user.spt
+                pushService.pushToUser(user.getId(), body, summary);
             }
         } catch (Exception e) {
             log.error("推送抢单结果失败", e);

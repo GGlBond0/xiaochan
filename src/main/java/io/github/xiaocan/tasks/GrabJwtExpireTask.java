@@ -1,10 +1,10 @@
 package io.github.xiaocan.tasks;
 
 import com.alibaba.fastjson2.JSONObject;
-import io.github.xiaocan.http.MessageHttp;
 import io.github.xiaocan.mapper.GrabLoginStateMapper;
 import io.github.xiaocan.model.entity.GrabLoginStateEntity;
 import io.github.xiaocan.model.entity.UserEntity;
+import io.github.xiaocan.service.PushService;
 import io.github.xiaocan.service.UserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +33,8 @@ public class GrabJwtExpireTask {
     private GrabLoginStateMapper grabLoginStateMapper;
     @Resource
     private UserService userService;
+    @Resource
+    private PushService pushService;
 
     /** 已提醒记录：loginStateId -> 已提醒的 expireAt，变化后重新提醒 */
     private final Map<Integer, LocalDateTime> reminded = new ConcurrentHashMap<>();
@@ -63,7 +65,7 @@ public class GrabJwtExpireTask {
                 : state.getExpireAt().atZone(java.time.ZoneId.systemDefault()).toEpochSecond();
         if (exp == null) return;
         UserEntity user = userService.getById(state.getUserId());
-        if (user == null || !StringUtils.hasText(user.getSpt())) return;
+        if (user == null) return;
         long remain = exp - nowSec;
         LocalDateTime expTime = java.time.Instant.ofEpochSecond(exp).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
         if (remain > EXPIRE_THRESHOLD_SECONDS) {
@@ -71,21 +73,27 @@ public class GrabJwtExpireTask {
             return;
         }
         if (reminded.get(state.getId()) != null && reminded.get(state.getId()).equals(expTime)) return;
+        Long locationId = state.getLocationId();
         if (remain <= 0) {
-            push(user, "小蚕登录态已过期", "抢单登录态「" + state.getName() + "」(JWT)已过期，请重新抓包录入，否则无法自动抢单。");
+            push(state, user, locationId, "小蚕登录态已过期", "抢单登录态「" + state.getName() + "」(JWT)已过期，请重新抓包录入，否则无法自动抢单。");
         } else {
             long days = remain / 86400;
-            push(user, "小蚕登录态即将过期",
+            push(state, user, locationId, "小蚕登录态即将过期",
                     "抢单登录态「" + state.getName() + "」剩余约 " + days + " 天，过期时间 " + expTime
                             + "。请及时重新抓包录入，避免自动抢单失效。");
         }
         reminded.put(state.getId(), expTime);
     }
 
-    private void push(UserEntity user, String summary, String content) {
+    private void push(GrabLoginStateEntity state, UserEntity user, Long locationId, String summary, String content) {
         try {
-            MessageHttp.sendMessage(user.getSpt(), content, summary);
-            log.info("已推送 JWT 过期提醒 spt={}, summary={}", user.getSpt(), summary);
+            if (locationId != null) {
+                pushService.pushToLocation(locationId, content, summary);
+            } else {
+                // 老记录未绑地址：回退 user.spt
+                pushService.pushToUser(user.getId(), content, summary);
+            }
+            log.info("已推送 JWT 过期提醒 stateId={}, locationId={}, summary={}", state.getId(), locationId, summary);
         } catch (Exception e) {
             log.error("推送 JWT 过期提醒失败", e);
         }

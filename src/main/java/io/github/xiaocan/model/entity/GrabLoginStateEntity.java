@@ -22,6 +22,10 @@ public class GrabLoginStateEntity {
      */
     private Integer userId;
     /**
+     * 所属地址id(location.id)，老记录留空
+     */
+    private Long locationId;
+    /**
      * 别名
      */
     private String name;

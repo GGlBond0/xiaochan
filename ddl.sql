@@ -215,6 +215,37 @@ CREATE TABLE `grab_login_state` (
 ALTER TABLE `grab_config`
     ADD COLUMN `login_state_id` INT NULL DEFAULT NULL COMMENT '绑定的登录态id(grab_login_state.id)' AFTER `user_id`;
 
+-- ============================
+-- 2026年7月14日 多spt推送-按地址绑定登录态与推送通道
+-- ============================
+
+-- 抢单登录态归属到地址(同一登录态不跨地址抢单,老记录留空回退user.spt)
+ALTER TABLE `grab_login_state`
+    ADD COLUMN `location_id` BIGINT NULL DEFAULT NULL COMMENT '所属地址id(location.id),老记录留空' AFTER `user_id`;
+ALTER TABLE `grab_login_state`
+    ADD INDEX `idx_location_id` (`location_id`);
+
+-- 地址推送目标表(一个地址可绑定多个WxPusher spt)
+DROP TABLE IF EXISTS `location_push_target`;
+CREATE TABLE `location_push_target` (
+    `id`          BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `location_id` BIGINT NOT NULL COMMENT '地址id(location.id)',
+    `spt`         VARCHAR(255) NOT NULL COMMENT 'WxPusher spt',
+    `remark`      VARCHAR(255) NULL DEFAULT NULL COMMENT '备注',
+    `enabled`     TINYINT(1) NOT NULL DEFAULT 1 COMMENT '1启用0停用',
+    `is_default`  TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认目标(预留,当前实现按enabled全推)',
+    `sort`        INT NOT NULL DEFAULT 0 COMMENT '排序',
+    `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted`     TINYINT(1) NOT NULL DEFAULT 0 COMMENT '逻辑删除',
+    PRIMARY KEY (`id`),
+    INDEX `idx_location_id` (`location_id`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '地址推送目标(多spt)';
+
+-- 回滚：
+-- ALTER TABLE `grab_login_state` DROP INDEX `idx_location_id`;
+-- ALTER TABLE `grab_login_state` DROP COLUMN `location_id`;
+-- DROP TABLE `location_push_target`;
+
 
 
 -- ----------------------------

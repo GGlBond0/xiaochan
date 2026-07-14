@@ -13,6 +13,10 @@ public class GrabLoginStateDTO {
      */
     private String name;
     /**
+     * 所属地址id(location.id)，可空。在地址页录入时填该地址。
+     */
+    private Long locationId;
+    /**
      * 抓包请求头原文，多行 "Key: Value" 或抓包 JSON
      */
     @NotBlank
