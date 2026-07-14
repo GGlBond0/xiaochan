@@ -1,6 +1,7 @@
 package io.github.xiaocan.service;
 
 import io.github.xiaocan.http.MessageHttp;
+import io.github.xiaocan.utils.MaskUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,7 +43,7 @@ public class SptService {
         String summary = "验证码通知";
         MessageHttp.sendMessage(spt, content, summary);
 
-        log.info("已向 spt:{} 发送验证码", spt);
+        log.info("已向 spt:{} 发送验证码", MaskUtil.mask(spt));
     }
 
     /**
@@ -61,17 +62,17 @@ public class SptService {
         String storedCode = codeMap.get(key);
 
         if (storedCode == null) {
-            log.warn("spt:{} 验证码已过期或不存在", spt);
+            log.warn("spt:{} 验证码已过期或不存在", MaskUtil.mask(spt));
             return false;
         }
 
         if (storedCode.equals(code)) {
             // 校验成功后删除验证码
             codeMap.remove(key);
-            log.info("spt:{} 验证码校验成功", spt);
+            log.info("spt:{} 验证码校验成功", MaskUtil.mask(spt));
             return true;
         } else {
-            log.warn("spt:{} 验证码校验失败", spt);
+            log.warn("spt:{} 验证码校验失败", MaskUtil.mask(spt));
             return false;
         }
     }

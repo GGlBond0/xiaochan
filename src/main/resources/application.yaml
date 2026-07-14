@@ -19,7 +19,9 @@ spring:
 
 mybatis-plus:
   configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 用 SLF4J 接管 SQL 日志，受 logback 级别控制（root=INFO 时不打印 SQL 详情，避免泄露敏感参数）。
+    # 排错时可临时把 io.github.xiaocan 包级别调到 DEBUG 查看具体 mapper SQL。
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
     map-underscore-to-camel-case: true
   global-config:
     db-config:

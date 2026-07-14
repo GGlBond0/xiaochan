@@ -9,6 +9,7 @@ import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.service.LocationService;
 import io.github.xiaocan.service.PushService;
 import io.github.xiaocan.service.UserService;
+import io.github.xiaocan.utils.MaskUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -96,7 +97,7 @@ public class PushServiceImpl implements PushService {
         try {
             MessageHttp.sendMessage(spt, content, summary);
         } catch (Exception e) {
-            log.error("推送失败 spt={} summary={}", spt, summary, e);
+            log.error("推送失败 spt={} summary={}", MaskUtil.mask(spt), summary, e);
         }
     }
 }

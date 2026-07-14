@@ -252,7 +252,8 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
 
     @Override
     public void addUpdateConfig(GrabConfigDTO dto) {
-        log.info("保存抢单配置请求: {}", dto);
+        log.info("保存抢单配置请求: configId={}, loginStateId={}, promotionId={}, silkId={}, cron={}, executeAt={}",
+                dto.getId(), dto.getLoginStateId(), dto.getPromotionId(), dto.getSilkId(), dto.getCron(), dto.getExecuteAt());
         String cron = dto.getCron();
         if (StringUtils.hasText(cron)) {
             String trimmed = cron.trim();
