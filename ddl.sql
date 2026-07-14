@@ -102,6 +102,7 @@ CREATE TABLE `user`  (
                          `id` int NOT NULL AUTO_INCREMENT COMMENT 'id',
                          `token` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'token',
                          `spt` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT 'spt',
+                         `notify_dedup_minutes` INT NOT NULL DEFAULT 60 COMMENT '通知去重/过期分钟数(全局)',
                          PRIMARY KEY (`id`) USING BTREE,
                          UNIQUE INDEX `idx_token`(`token` ASC) USING BTREE,
                          UNIQUE INDEX `idx_spt`(`spt` ASC) USING BTREE

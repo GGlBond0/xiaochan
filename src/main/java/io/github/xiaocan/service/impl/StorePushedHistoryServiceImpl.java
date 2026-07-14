@@ -25,8 +25,8 @@ public class StorePushedHistoryServiceImpl extends ServiceImpl<StorePushedHistor
     public Page<StorePushedHistoryVO> pageByUser(NotifyHistoryQueryDTO dto) {
         // 获取当前用户ID
         Integer userId = userService.getByCurrentRequest().getId();
-        // 最近 N 分钟过滤：提前求值避免 null 拆箱；为空则不过滤
-        Integer recentMinutes = dto.getRecentMinutes();
+        // 最近 N 分钟过滤：N 取当前用户的全局去重/过期分钟数（user.notify_dedup_minutes）
+        Integer recentMinutes = userService.getByCurrentRequest().getNotifyDedupMinutes();
         boolean filterByMinutes = recentMinutes != null && recentMinutes > 0;
         LocalDateTime minCreateTime = filterByMinutes ? LocalDateTime.now().minusMinutes(recentMinutes) : null;
 

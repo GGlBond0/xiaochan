@@ -37,6 +37,13 @@ public class UserEntity {
      */
     private java.time.LocalDateTime xcLoginUpdateTime;
 
+    /**
+     * 通知去重/过期分钟数（全局），默认 60。
+     * 同店 N 分钟内不重复通知；超过 N 分钟的旧推送记录自动删除；
+     * 通知记录页仅显示最近 N 分钟内的记录。
+     */
+    private Integer notifyDedupMinutes = 60;
+
 
 
 

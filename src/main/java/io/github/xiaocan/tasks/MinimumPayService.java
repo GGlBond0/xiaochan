@@ -10,7 +10,9 @@ import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.enums.MonitorTypeEnums;
 import io.github.xiaocan.service.MonitoryConfigService;
 import io.github.xiaocan.service.StorePushedHistoryService;
+import io.github.xiaocan.service.UserService;
 import io.github.xiaocan.service.XiaoChanService;
+import io.github.xiaocan.model.entity.UserEntity;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +30,15 @@ public class MinimumPayService extends BaseTask {
     private MonitoryConfigService monitoryConfigService;
     @Resource
     private StorePushedHistoryService storePushedHistoryService;
+    @Resource
+    private UserService userService;
+
+    /** 取该配置所属用户的全局去重/过期分钟数，null 兜底 60。 */
+    private int dedupMinutesOf(MonitorConfigEntity notifyConfig) {
+        UserEntity user = userService.getById(notifyConfig.getUserId());
+        if (user == null || user.getNotifyDedupMinutes() == null) return 60;
+        return user.getNotifyDedupMinutes();
+    }
 
 
 
@@ -40,7 +51,7 @@ public class MinimumPayService extends BaseTask {
     @Override
     protected List<StoreInfo> filterStoreInfos(MonitorConfigEntity notifyConfig, List<StoreInfo> storeInfos) {
         MinimumPayExtNotifyConfig extNotifyConfig = JSON.parseObject(notifyConfig.getExtConfig(), MinimumPayExtNotifyConfig.class);
-        int dedupMin = extNotifyConfig.getDedupMinutes() == null ? 60 : extNotifyConfig.getDedupMinutes();
+        int dedupMin = dedupMinutesOf(notifyConfig);
         return storeInfos
                 .stream()
                 .filter(storeInfo -> storeInfo.getLeftNumber() > 0)
@@ -56,8 +67,7 @@ public class MinimumPayService extends BaseTask {
     @Override
     protected void cleanupExpired(MonitorConfigEntity notifyConfig) {
         try {
-            MinimumPayExtNotifyConfig ext = JSON.parseObject(notifyConfig.getExtConfig(), MinimumPayExtNotifyConfig.class);
-            int dedupMin = ext.getDedupMinutes() == null ? 60 : ext.getDedupMinutes();
+            int dedupMin = dedupMinutesOf(notifyConfig);
             int deleted = storePushedHistoryService.deleteByNotifyIdOlderThanMinutes(notifyConfig.getId(), dedupMin);
             if (deleted > 0) {
                 log.info("configId: {} 清理 {} 分钟前的过期推送记录 {} 条", notifyConfig.getId(), dedupMin, deleted);

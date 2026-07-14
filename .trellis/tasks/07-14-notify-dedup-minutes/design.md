@@ -62,6 +62,37 @@
 
 ## 验证
 
+## 设计变更（2026-07-14）：N 从「配置级」改为「用户全局级」
+
+**问题**：原方案把 dedupMinutes 放每个监控配置的 ext_config，多配置时记录页选「全部配置」无法确定 N，且 N 属于「展示/清理策略」而非单配置业务参数，配置级存放语义不当。
+
+**新方案**：N 作为**用户全局值**，存 `user` 表新列 `notify_dedup_minutes`（INT 默认 60，NOT NULL）。所有监控配置共用同一 N。
+
+### 变更点（覆盖上文「变更点」章节）
+
+1. **DB schema**：`ALTER TABLE user ADD COLUMN notify_dedup_minutes INT NOT NULL DEFAULT 60`。同步更新 `ddl.sql` 的 user 表定义。生产库执行 ALTER（已有用户回填 60）。
+
+2. **`UserEntity`** 加 `private Integer notifyDedupMinutes = 60;`。
+
+3. **`MinimumPayExtNotifyConfig`**：移除 `dedupMinutes` 字段（不再配置级）。已部署的 ext_config 里若有该字段，反序列化忽略即可（fastjson 忽略多余字段）。
+
+4. **取 N 的来源**：`MinimumPayService` 去重 + 清理改为从 `userService.getById(notifyConfig.getUserId()).getNotifyDedupMinutes()` 取全局 N（null→60）。
+
+5. **新增接口** `NotifyDedupController`（或加到已有 controller）：
+   - `GET /api/notify/dedup-minutes` → 返回当前用户全局 N。
+   - `PUT /api/notify/dedup-minutes` body `{minutes: N}` → 更新当前用户 N（校验 ≥1）。
+
+6. **`pageByUser`**：`recentMinutes` 改为**后端自行读当前用户全局 N**，前端不再传 recentMinutes（移除该 DTO 字段或保留忽略）。后端在 pageByUser 取 `userService.getByCurrentRequest().getNotifyDedupMinutes()` 作为过滤 N。
+
+7. **前端**：
+   - `MonitorConfigView`：**移除**「去重/过期分钟」输入框及相关 form 字段。
+   - `NotifyHistoryView`：顶部加 N 输入框 + 保存按钮，调 GET/PUT 接口；页面加载时拉取 N 显示；查询不再前端传 recentMinutes（后端自动按全局 N 过滤）。
+
+### 兼容
+- 旧 ext_config 的 dedupMinutes 字段被忽略，无副作用。
+- 生产 ALTER 加列有默认值，不影响现有行。
+
+
 - 后端 `mvn -o compile` 通过。
 - 前端 `npm run type-check` + `build` 通过。
 - 生产实测：配置 N=5 → 等一次 cron 执行（或手动触发）→ 查 `store_pushed_history` 中该 config 超过 5 分钟的记录已删除；记录页只显示最近 5 分钟记录。

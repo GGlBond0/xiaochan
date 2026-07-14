@@ -24,12 +24,4 @@ public class MinimumPayExtNotifyConfig extends AbstractExtNotifyConfig{
      * 是否仅命中 3km 内（距离 <= 3000 米）的门店，默认 false
      */
     private Boolean within3km = false;
-
-    /**
-     * 去重/过期分钟数，默认 60。
-     * 含义：同店 N 分钟内不重复通知；超过 N 分钟的旧推送记录自动删除，
-     * 通知记录页仅显示最近 N 分钟内的记录。
-     */
-    @Min(value = 1)
-    private Integer dedupMinutes = 60;
 }
