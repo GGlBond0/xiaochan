@@ -36,6 +36,7 @@ These guides help you **ask the right questions before coding**.
 - [ ] You're not sure where to put some logic
 - [ ] You are adding an event kind, JSONL record, RPC payload, or config field
 - [ ] UI / command code starts casting raw payload fields directly
+- [ ] **You call a third-party/upstream API** → distinguish error sources: 403/timeout = proxy/network (retry), 401/4xx-business = upstream rejection (don't retry, surface it). See [Xiaocan RPC Contract](../backend/xiaocan-rpc-contract.md) §4.
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 
