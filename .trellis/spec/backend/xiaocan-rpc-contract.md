@@ -210,3 +210,96 @@ headers.put("X-Sivir", auth.getSivir());  // 必填
 ## 历史：mini 版（已废弃，2026-07-15 前的版本）
 
 > mini 版抽奖刷任务走电脑微信小程序抓包，`X-Platform=mini`、`appid:20` header、body 带 `app_id:20`、端点 `gw.xiaocantech.com`、登录态无 `X-Sivir`、`lottery_auth` 表存 `nami` 列。**已全部删除**，代码切到 App 版。保留此段作历史对照，未来勿再用 mini 版写法。
+
+---
+
+## Scenario: 刷任务结果契约 LotteryTaskResultVO（2026-07-15 task `07-15-lottery-task-run-log`）
+
+### 1. Scope / Trigger
+
+`POST /api/lottery/run?authId=<id>`（`LotteryController.runTask` → `LotteryServiceImpl.runTask`）的响应结构变更：`LotteryTaskResultVO.TaskItem` 增加 `status` 枚举字段，失败原因在后端友好化。触发跨层契约更新（前端 `SettingsView.vue` 完成明细区按 status 渲染）。
+
+### 2. Signatures
+
+```java
+// VO
+LotteryTaskResultVO {
+  String authName;
+  Integer beforeCount, afterCount;      // GetLotteryProgress.lottery_count（刷前/刷后快照，失败为 null）
+  Integer beforeDayNum, afterDayNum;    // LotteryInfo.day_num
+  List<TaskItem> tasks;                  // 全部 5 个任务的逐条记录（不再跳过已完成的）
+  String error;                          // 顶层错误（友好化文案），非 null 表示整体性失败
+}
+
+enum TaskStatus { SKIPPED, OK, FAIL }   // 已完成跳过 / 本次成功 / 本次失败
+
+TaskItem {
+  Integer type;          // AddLotteryTimes.type
+  String desc;           // 任务描述
+  TaskStatus status;     // 执行状态（新增，主语义）
+  Boolean ok;            // = (status == OK)，保留兼容旧消费方
+  String msg;            // 原因：SKIPPED="已完成"；FAIL=友好化原因；OK 留空
+}
+```
+
+### 3. Contracts
+
+- `tasks` **始终含全部 5 个 flag 对应的 TaskItem**（分享/领美团红包/领饿了么红包/浏览福利页/浏览霸王餐页），不再因已完成而省略。
+- `status` 由后端权威赋值；前端按 `ok` 降级兜底（无 status 时 `ok==true→成功`、`ok==false&&msg→失败`、否则→已完成）。
+- `msg` 失败原因经后端 `friendlyMsg(raw, code)` 友好化（见下错误矩阵），**不再透传裸 `状态码错误:-1`**。
+
+### 4. Validation & Error Matrix（friendlyMsg 映射，2026-07-15 新增）
+
+| 触发 | code | 友好文案（msg/error） |
+|---|---|---|
+| 当日加机会次数已满/权限不足 | 401 | 当日加机会次数已满或权限不足 |
+| 代理 403 或超时（`状态码错误:-1`/`状态码错误:403`） | -1 | 代理不可用（403 或超时），请更换代理后重试 |
+| 代理池为空（`代理不可用`） | -1 | 代理池为空，请配置代理后重试 |
+| 登录态不完整 | -1 | 登录态不完整，请补全 silk_id/X-Session-Id/X-Sivir |
+| 其他 | — | 原文透传 |
+
+### 5. Good/Base/Bad Cases
+
+- **Good**：未完成任务 `addLotteryTimes` 返回 `code:0` → `status=OK`，对应行前端绿色"成功"。
+- **Base**：任务已完成 → `status=SKIPPED, msg="已完成"`，前端灰色"已完成"（不显示 msg，避免与状态标签重复）。
+- **Bad**：`addLotteryTimes` 抛 `状态码错误:-1`（代理全挂）→ 该任务 `status=FAIL, msg=友好化`；若 `lotteryInfo` 都失败 → 顶层 `error` 友好化 + `tasks` 空 + return；若仅快照 `getLotteryProgress` 失败 → 快照字段 null（前端显示"—"），`tasks` 已填不丢。
+
+### 6. Tests Required
+
+- 全完成场景：`lottery_info` 5 个 flag 全 true → `tasks` 含 5 个 `SKIPPED`（断言 size==5、全 SKIPPED）。
+- 快照失败不丢明细：`getLotteryProgress` 抛异常 → `beforeCount/afterCount` null 且 `tasks` 仍填充（断言独立 try 不中断遍历）。
+- 顺序正确性：`beforeCount` 必须取自遍历**之前**的 `getLotteryProgress`（断言 `beforeCount` 反映 pre-run、`afterCount` 反映 post-run，机会变化非恒 0）。
+- 友好化：代理失败时 `msg`/`error` 不含裸 `状态码错误:-1`（断言含"代理不可用"）。
+
+### 7. Wrong vs Correct
+
+#### Wrong：刷前快照排在遍历之后
+```java
+// 遍历 addLotteryTimes 先执行，再取 beforeCount → beforeCount 实为 post-run 值
+for (...) { addLotteryTimes(...); }           // 机会已 +N
+vo.setBeforeCount(getLotteryProgress(...));   // 此时已是刷后值，机会变化恒 ~0，"刷前机会数"标签失真
+```
+
+#### Correct：刷前快照在遍历前，各阶段独立 try
+```java
+try { vo.setBeforeCount(getLotteryProgress(...)); } catch (e) { log.warn(...); }  // 刷前（失败只丢统计）
+try { lotteryInfo...; } catch (e) { vo.setError(friendlyMsg(...)); return vo; }    // 核心失败直接返回
+for (...) { /* 填 items */ }
+try { vo.setAfterCount(getLotteryProgress(...)); } catch (e) { log.warn(...); }   // 刷后（失败只丢统计）
+```
+
+---
+
+## Design Decision: 刷任务执行顺序与独立 try 鲁棒性（2026-07-15）
+
+**Context**：`runTask` 原顺序 刷前 getLotteryProgress → lotteryInfo → 遍历 addLotteryTimes → 刷后 getLotteryProgress。代理不稳定时，刷前快照排在 lotteryInfo 之前，第一步全挂就直接抛异常到外层 catch，**走不到遍历**，`tasks` 为空——用户只看到顶层 error，看不到任何任务明细（AC4 违背）。
+
+**Options**：
+1. 遍历前置、快照后置（但刷前快照也被推到遍历后 → 语义错，见 Wrong/Correct）。
+2. 各阶段独立 try + 刷前快照仍在遍历前（最终采用）。
+
+**Decision**：选 2。顺序 = **刷前快照(独立 try) → lotteryInfo(独立 try,失败即 error+return) → 遍历填 items → 刷后快照(独立 try)**。刷前/刷后快照各用独立 try，失败只 `log.warn` 不抛出；lotteryInfo 失败设 `error` 并 return（无明细可填）；遍历内每任务 `addLotteryTimes` 再各自 try。这样保证：① `beforeCount`/`afterCount` 语义真实；② 只要 lotteryInfo 通，`tasks` 必填（快照失败不丢明细）；③ 单任务失败不中断后续。
+
+**Why**：刷任务对用户的核心价值是"逐任务执行明细"，统计数字(机会数)是次要辅助。代理不稳定时宁可丢统计数字也要保明细。独立 try 让每个外部调用故障的影响最小化到自身字段。
+
+**How to extend**：未来若新增其它需快照对比的刷类任务，沿用"核心遍历用独立 try 包住、统计快照用独立 try 不中断"模式；友好化原因集中在后端 `friendlyMsg`，前端只渲染，避免前后端重复维护映射表。

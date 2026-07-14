@@ -84,51 +84,78 @@ public class LotteryServiceImpl implements LotteryService {
         vo.setTasks(items);
 
         try {
-            // 刷前快照
-            JSONObject beforeProgress = lotteryHttp.getLotteryProgress(auth);
-            vo.setBeforeCount(getLotteryCount(beforeProgress));
-            JSONObject info = lotteryHttp.lotteryInfo(auth);
-            JSONObject li = info.getJSONObject("lottery_info");
-            vo.setBeforeDayNum(li == null ? null : li.getInteger("day_num"));
-
-            // 遍历未完成的浏览/领取类任务，按映射调 AddLotteryTimes
-            if (li != null) {
-                for (Map.Entry<String, Integer> entry : FLAG_TO_TYPE.entrySet()) {
-                    String flag = entry.getKey();
-                    int type = entry.getValue();
-                    Boolean done = li.getBoolean(flag);
-                    if (done != null && done) {
-                        continue; // 已完成，跳过
-                    }
-                    LotteryTaskResultVO.TaskItem item = new LotteryTaskResultVO.TaskItem();
-                    item.setType(type);
-                    item.setDesc(TYPE_TO_DESC.getOrDefault(type, "type=" + type));
-                    try {
-                        JSONObject r = lotteryHttp.addLotteryTimes(auth, type);
-                        JSONObject status = r.getJSONObject("status");
-                        int code = status == null ? -1 : status.getIntValue("code");
-                        item.setOk(code == 0);
-                        if (code != 0) {
-                            item.setMsg(status == null ? "无status响应" : status.getString("msg"));
-                        }
-                    } catch (Exception e) {
-                        item.setOk(false);
-                        item.setMsg(e.getMessage());
-                        log.warn("addLotteryTimes type={} 异常: {}", type, e.getMessage());
-                    }
-                    items.add(item);
-                }
+            // 1) 刷前快照：失败只丢统计数字，不丢明细（独立 try）
+            try {
+                JSONObject beforeProgress = lotteryHttp.getLotteryProgress(auth);
+                vo.setBeforeCount(getLotteryCount(beforeProgress));
+            } catch (Exception e) {
+                log.warn("刷前 getLotteryProgress 失败（不影响明细）: {}", e.getMessage());
             }
 
-            // 刷后快照
-            JSONObject afterProgress = lotteryHttp.getLotteryProgress(auth);
-            vo.setAfterCount(getLotteryCount(afterProgress));
-            JSONObject afterInfo = lotteryHttp.lotteryInfo(auth);
-            JSONObject afterLi = afterInfo == null ? null : afterInfo.getJSONObject("lottery_info");
-            vo.setAfterDayNum(afterLi == null ? null : afterLi.getInteger("day_num"));
+            // 2) lotteryInfo：查未完成项（核心，放遍历前，保证后续明细必填）
+            JSONObject info;
+            JSONObject li;
+            try {
+                info = lotteryHttp.lotteryInfo(auth);
+                li = info == null ? null : info.getJSONObject("lottery_info");
+                vo.setBeforeDayNum(li == null ? null : li.getInteger("day_num"));
+            } catch (Exception e) {
+                // lotteryInfo 都失败 → 代理完全不可用，记录 error 并直接结束（无明细可填）
+                log.error("刷霸王餐 lotteryInfo 失败 authId={}", authId, e);
+                vo.setError(friendlyMsg(e.getMessage(), -1));
+                return vo;
+            }
+
+            // 3) 遍历全部浏览/领取类任务：已完成记 SKIPPED，未完成调 AddLotteryTimes 记 OK/FAIL
+            for (Map.Entry<String, Integer> entry : FLAG_TO_TYPE.entrySet()) {
+                String flag = entry.getKey();
+                int type = entry.getValue();
+                LotteryTaskResultVO.TaskItem item = new LotteryTaskResultVO.TaskItem();
+                item.setType(type);
+                item.setDesc(TYPE_TO_DESC.getOrDefault(type, "type=" + type));
+
+                Boolean done = li == null ? null : li.getBoolean(flag);
+                if (Boolean.TRUE.equals(done)) {
+                    // 已完成，跳过未调用
+                    item.setStatus(LotteryTaskResultVO.TaskStatus.SKIPPED);
+                    item.setOk(false);
+                    item.setMsg("已完成");
+                    items.add(item);
+                    continue;
+                }
+                // 未完成（含 li==null 或 flag=false）：尝试调用
+                try {
+                    JSONObject r = lotteryHttp.addLotteryTimes(auth, type);
+                    JSONObject status = r == null ? null : r.getJSONObject("status");
+                    int code = status == null ? -1 : status.getIntValue("code");
+                    boolean ok = code == 0;
+                    item.setStatus(ok ? LotteryTaskResultVO.TaskStatus.OK : LotteryTaskResultVO.TaskStatus.FAIL);
+                    item.setOk(ok);
+                    if (!ok) {
+                        item.setMsg(friendlyMsg(status == null ? null : status.getString("msg"), code));
+                    }
+                } catch (Exception e) {
+                    item.setStatus(LotteryTaskResultVO.TaskStatus.FAIL);
+                    item.setOk(false);
+                    item.setMsg(friendlyMsg(e.getMessage(), -1));
+                    log.warn("addLotteryTimes type={} 异常: {}", type, e.getMessage());
+                }
+                items.add(item);
+            }
+
+            // 4) 刷后快照（统计数字，失败不丢明细，独立 try）
+            try {
+                JSONObject afterProgress = lotteryHttp.getLotteryProgress(auth);
+                vo.setAfterCount(getLotteryCount(afterProgress));
+                JSONObject afterInfo = lotteryHttp.lotteryInfo(auth);
+                JSONObject afterLi = afterInfo == null ? null : afterInfo.getJSONObject("lottery_info");
+                vo.setAfterDayNum(afterLi == null ? null : afterLi.getInteger("day_num"));
+            } catch (Exception e) {
+                log.warn("刷后快照失败（不影响明细）: {}", e.getMessage());
+            }
         } catch (Exception e) {
             log.error("刷霸王餐浏览任务失败 authId={}", authId, e);
-            vo.setError(e.getMessage());
+            vo.setError(friendlyMsg(e.getMessage(), -1));
         }
         return vo;
     }
@@ -137,5 +164,30 @@ public class LotteryServiceImpl implements LotteryService {
         if (progress == null) return null;
         JSONObject lp = progress.getJSONObject("lottery_progress");
         return lp == null ? null : lp.getInteger("lottery_count");
+    }
+
+    /**
+     * 把单任务失败原因转成友好文案（与前端顶层 friendlyError 映射对齐）。
+     *
+     * @param raw  原始原因（AddLotteryTimes status.msg 或异常 message）
+     * @param code AddLotteryTimes status.code；异常传入 -1
+     */
+    private String friendlyMsg(String raw, int code) {
+        if (code == 401) {
+            return "当日加机会次数已满或权限不足";
+        }
+        if (raw == null) {
+            return "无响应";
+        }
+        if (raw.contains("状态码错误:-1") || raw.contains("状态码错误:403")) {
+            return "代理不可用（403 或超时），请更换代理后重试";
+        }
+        if (raw.contains("代理不可用")) {
+            return "代理池为空，请配置代理后重试";
+        }
+        if (raw.contains("登录态不完整")) {
+            return "登录态不完整，请补全 silk_id/X-Session-Id/X-Sivir";
+        }
+        return raw;
     }
 }

@@ -35,6 +35,18 @@ public class LotteryTaskResultVO {
      */
     private String error;
 
+    /**
+     * 单个任务执行状态：已完成跳过 / 本次成功 / 本次失败
+     */
+    public enum TaskStatus {
+        /** 已完成，跳过未调用 */
+        SKIPPED,
+        /** 本次调用成功 */
+        OK,
+        /** 本次调用失败 */
+        FAIL
+    }
+
     @Data
     public static class TaskItem {
         /**
@@ -46,11 +58,15 @@ public class LotteryTaskResultVO {
          */
         private String desc;
         /**
-         * 是否成功（AddLotteryTimes 返回 code==0）
+         * 执行状态
+         */
+        private TaskStatus status;
+        /**
+         * 是否成功（= status == OK，保留兼容旧消费方）
          */
         private Boolean ok;
         /**
-         * 原始返回消息（失败时）
+         * 原因/消息：SKIPPED="已完成"；FAIL=失败原因（友好化）；OK 留空
          */
         private String msg;
     }
