@@ -203,7 +203,8 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
             result.setCode(-1);
             result.setMsg("饭票不足，请先领取");
             saveHistory(config, user.getId(), false, -1, "饭票不足，请先领取", null, 1, triggerType, null, null);
-            push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 饭票不足，请先领取");
+            // 此时尚未查询活动详情，用 config 快照构造前缀
+            push(config, user, "抢单失败", buildPushPrefix(config, config.getStoreName(), config.getPromoDetail()) + " 饭票不足，请先领取");
             return result;
         }
         // 位置
@@ -236,7 +237,7 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
         // storeName==null（promoSnapshot 查询失败）时 isBlacklisted 返回 false，走原逻辑不误伤。
         if (MerchantBlacklistHolder.isBlacklisted(storeName)) {
             saveHistory(config, user.getId(), false, -1, "商家黑名单拦截", null, 1, triggerType, storeName, promoDetail);
-            push(config, user, "抢单拦截", "活动" + config.getPromotionId() + " 商家\"" + storeName + "\"命中黑名单，已拦截");
+            push(config, user, "抢单拦截", buildPushPrefix(config, storeName, promoDetail) + " 商家\"" + storeName + "\"命中黑名单，已拦截");
             return fail(-1, "商家黑名单拦截");
         }
 
@@ -277,17 +278,17 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                         .set(GrabConfigEntity::getStatus, MonitorConfigStatusEnums.DISABLE)
                         .update();
                 grabCronScheduler.cancel(config.getId());
-                push(config, user, "抢单成功", "活动" + config.getPromotionId() + " 抢到，订单号 " + orderId);
+                push(config, user, "抢单成功", buildPushPrefix(config, storeName, promoDetail) + " 抢到，订单号 " + orderId);
                 break;
             }
             if (code != 4) {
-                push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 失败：" + msg + "(code=" + code + ")");
+                push(config, user, "抢单失败", buildPushPrefix(config, storeName, promoDetail) + " 失败：" + msg + "(code=" + code + ")");
                 break;
             }
             if (attempt < maxRetry && retry) {
                 sleep(interval);
             } else {
-                push(config, user, "抢单失败", "活动" + config.getPromotionId() + " 重试" + maxRetry + "次仍为未开始/失败");
+                push(config, user, "抢单失败", buildPushPrefix(config, storeName, promoDetail) + " 重试" + maxRetry + "次仍为未开始/失败");
             }
         }
         if (finalResult == null) finalResult = fail(-1, "未知失败");
@@ -503,6 +504,43 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
                     + "返" + s.getRebatePrice().stripTrailingZeros().toPlainString();
         }
         return null;
+    }
+
+    /** 平台 type → 中文名：1=美团，2=饿了么，3=京东 */
+    private static String platformName(Integer type) {
+        if (type == null) return null;
+        switch (type) {
+            case 1: return "美团";
+            case 2: return "饿了么";
+            case 3: return "京东";
+            default: return null;
+        }
+    }
+
+    /**
+     * 构造推送正文的活动前缀：店铺名(平台) 优惠明细 活动id。
+     * 数据来源优先用 doGrab 内实时查到的 storeName/promoDetail（更准），缺失回退 config 快照。
+     * 各字段为空时优雅省略，绝不拼出 "null"。
+     */
+    private String buildPushPrefix(GrabConfigEntity config, String storeName, String promoDetail) {
+        // 实时查到的为空时回退 config 快照
+        String name = StringUtils.hasText(storeName) ? storeName : config.getStoreName();
+        String detail = StringUtils.hasText(promoDetail) ? promoDetail : config.getPromoDetail();
+        String platform = platformName(config.getStorePlatform());
+
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(name)) {
+            sb.append("店铺「").append(name).append("」");
+        }
+        if (StringUtils.hasText(platform)) {
+            sb.append("(").append(platform).append(")");
+        }
+        if (sb.length() > 0) sb.append(" ");
+        if (StringUtils.hasText(detail)) {
+            sb.append(detail).append(" ");
+        }
+        sb.append("活动").append(config.getPromotionId());
+        return sb.toString();
     }
 
     private void push(GrabConfigEntity config, UserEntity user, String summary, String body) {
