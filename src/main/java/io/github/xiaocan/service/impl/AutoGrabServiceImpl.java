@@ -99,17 +99,17 @@ public class AutoGrabServiceImpl implements AutoGrabService {
             return null;
         }
 
-        // 4. 立即抢：防重——当天 auto=1 且 lastGrabTime IS NULL 且 lastResult IS NULL 的占位存在则跳过
+        // 4. 立即抢：防重——当天 auto=1 且 lastGrabTime IS NULL 的占位存在则跳过
+        //  (执行前 lastGrabTime 始终为空，含"执行中"标记也挡；doGrab 成功/回调失败补写后 lastGrabTime 非 null 即放行)
         long placeholder = grabService.lambdaQuery()
                 .eq(GrabConfigEntity::getUserId, userId)
                 .eq(GrabConfigEntity::getPromotionId, promotionId)
                 .eq(GrabConfigEntity::getAuto, true)
                 .apply("DATE(create_time) = CURDATE()")
                 .isNull(GrabConfigEntity::getLastGrabTime)
-                .isNull(GrabConfigEntity::getLastResult)
                 .count();
         if (placeholder > 0) {
-            log.info("自动抢单跳过(已有未执行占位): userId={}, promotionId={}", userId, promotionId);
+            log.info("自动抢单跳过(已有未消费占位): userId={}, promotionId={}", userId, promotionId);
             return null;
         }
 
@@ -119,8 +119,7 @@ public class AutoGrabServiceImpl implements AutoGrabService {
         entity.setStatus(MonitorConfigStatusEnums.ENABLE);
         entity.setExecuteAt(now);   // 仅留痕，不用于调度
         entity.setCron(null);
-        // 先置"执行中"，防止 doGrab 回调失败后占位仍为空被重复抢
-        entity.setLastResult(RUNNING_MARK);
+        entity.setLastResult(RUNNING_MARK); // 占位状态展示；防重靠 lastGrabTime(执行前为null→挡, 回调补写后→放行)
         grabService.save(entity);
         log.info("自动抢单已建占位(立即抢): grabConfigId={}, userId={}, promotionId={}",
                 entity.getId(), userId, promotionId);
@@ -132,20 +131,23 @@ public class AutoGrabServiceImpl implements AutoGrabService {
                 GrabConfigEntity latest = grabService.getById(configId);
                 if (latest == null) return;
                 var result = grabService.doGrab(latest, "AUTO");
-                // doGrab 成功会自行写 lastResult/lastGrabTime/DISABLE；
-                // 失败时 doGrab 不回写 lastResult（仍停在"执行中"），这里兜底更新，避免占位永久挡后续当天命中
+                // doGrab 成功会自行写 lastResult/lastGrabTime/DISABLE。
+                // 失败时 doGrab 不回写 lastGrabTime（占位仍 lastGrabTime NULL → 永久挡后续当天命中），
+                // 这里兜底补写 lastGrabTime 标记"已消费"并更新 lastResult，放行后续命中再抢。
                 if (result == null || !Boolean.TRUE.equals(result.getSuccess())) {
                     String msg = result == null ? "执行失败" : result.getMsg();
                     grabService.lambdaUpdate().eq(GrabConfigEntity::getId, configId)
                             .set(GrabConfigEntity::getLastResult, "失败:" + msg)
+                            .set(GrabConfigEntity::getLastGrabTime, java.time.LocalDateTime.now())
                             .update();
                 }
             } catch (Exception e) {
                 log.error("自动抢单异步执行异常 configId={}: {}", configId, e.getMessage(), e);
-                // 兜底：异常时清除"执行中"标记，避免占位永久挡后续
+                // 兜底：异常时补写 lastGrabTime 标记"已消费"，避免占位永久挡后续当天命中
                 try {
                     grabService.lambdaUpdate().eq(GrabConfigEntity::getId, configId)
                             .set(GrabConfigEntity::getLastResult, "执行异常:" + e.getMessage())
+                            .set(GrabConfigEntity::getLastGrabTime, java.time.LocalDateTime.now())
                             .update();
                 } catch (Exception ignore) { /* 尽力而为 */ }
             }
