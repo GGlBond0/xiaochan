@@ -20,6 +20,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -53,6 +55,11 @@ public class MinimumPayService extends BaseTask {
     protected List<StoreInfo> filterStoreInfos(MonitorConfigEntity notifyConfig, List<StoreInfo> storeInfos) {
         MinimumPayExtNotifyConfig extNotifyConfig = JSON.parseObject(notifyConfig.getExtConfig(), MinimumPayExtNotifyConfig.class);
         int dedupMin = dedupMinutesOf(notifyConfig);
+        // 批量去重：一次取本配置最近 dedupMin 分钟内已推送的 (storeId, promotionId)，内存比对，消除逐店单查
+        Set<String> pushed = storePushedHistoryService.findPushedWithinMinutes(notifyConfig.getId(), dedupMin)
+                .stream()
+                .map(e -> dedupKey(e.getStoreId(), e.getPromotionId()))
+                .collect(Collectors.toSet());
         return storeInfos
                 .stream()
                 // 商家黑名单：命中门店直接剔除，不推送、不写历史
@@ -62,9 +69,14 @@ public class MinimumPayService extends BaseTask {
                 // 仅命中 3km 内（距离 <= 3000 米）的门店，默认 false 不生效
                 .filter(storeInfo -> !Boolean.TRUE.equals(extNotifyConfig.getWithin3km())
                         || (storeInfo.getDistance() != null && storeInfo.getDistance() <= 3000))
-                // 去重：同店 N 分钟内已推送过则跳过（替代永久去重）
-                .filter(storeInfo -> storePushedHistoryService.findByNotifyIdAndStoreIdWithinMinutes(notifyConfig.getId(), storeInfo.getStoreId(), dedupMin) == null)
+                // 去重：同一 (storeId, promotionId) 在 dedupMin 内已推送过则跳过；不同 promotionId 视为新活动不互相阻挡
+                .filter(storeInfo -> !pushed.contains(dedupKey(storeInfo.getStoreId(), storeInfo.getPromotionId())))
                 .toList();
+    }
+
+    /** 去重键：storeId + promotionId。promotionId 为 null 时占位 "null"，避免与有值活动混淆。 */
+    private static String dedupKey(Integer storeId, Integer promotionId) {
+        return storeId + ":" + (promotionId == null ? "null" : promotionId);
     }
 
     @Override

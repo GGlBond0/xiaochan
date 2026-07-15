@@ -71,7 +71,8 @@ CREATE TABLE `store_pushed_history`  (
                                          INDEX `idx_notify_config_id`(`notify_config_id` ASC) USING BTREE,
                                          INDEX `idx_store_id`(`store_id` ASC) USING BTREE,
                                          INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
-                                         INDEX `idx_promotion_id`(`promotion_id` ASC) USING BTREE
+                                         INDEX `idx_promotion_id`(`promotion_id` ASC) USING BTREE,
+                                         INDEX `idx_notify_time_store_promo`(`notify_config_id` ASC, `create_time` ASC, `store_id` ASC, `promotion_id` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 12 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '门店推送历史' ROW_FORMAT = Dynamic;
 
 -- ----------------------------

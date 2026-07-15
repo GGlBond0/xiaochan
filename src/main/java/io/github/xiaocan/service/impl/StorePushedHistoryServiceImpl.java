@@ -14,6 +14,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class StorePushedHistoryServiceImpl extends ServiceImpl<StorePushedHistoryMapper, StorePushedHistoryEntity> implements StorePushedHistoryService {
@@ -66,13 +67,13 @@ public class StorePushedHistoryServiceImpl extends ServiceImpl<StorePushedHistor
     }
 
     @Override
-    public StorePushedHistoryEntity findByNotifyIdAndStoreIdWithinMinutes(Integer notifyId, Integer storeId, int minutes) {
+    public List<StorePushedHistoryEntity> findPushedWithinMinutes(Integer notifyId, int minutes) {
         return lambdaQuery()
+                .select(StorePushedHistoryEntity::getStoreId,
+                        StorePushedHistoryEntity::getPromotionId)
                 .eq(StorePushedHistoryEntity::getNotifyConfigId, notifyId)
-                .eq(StorePushedHistoryEntity::getStoreId, storeId)
                 .ge(StorePushedHistoryEntity::getCreateTime, LocalDateTime.now().minusMinutes(minutes))
-                .last("limit 1")
-                .one();
+                .list();
     }
 
     @Override

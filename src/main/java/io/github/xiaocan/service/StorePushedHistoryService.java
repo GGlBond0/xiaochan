@@ -6,6 +6,8 @@ import io.github.xiaocan.model.dto.NotifyHistoryQueryDTO;
 import io.github.xiaocan.model.entity.StorePushedHistoryEntity;
 import io.github.xiaocan.model.vo.StorePushedHistoryVO;
 
+import java.util.List;
+
 public interface StorePushedHistoryService extends IService<StorePushedHistoryEntity> {
 
     /**
@@ -21,10 +23,11 @@ public interface StorePushedHistoryService extends IService<StorePushedHistoryEn
     StorePushedHistoryEntity findByNotifyIdAndStoreIdAll(Integer notifyId, Integer storeId);
 
     /**
-     * 查询某监控配置下，某门店在最近 N 分钟内是否已推送过。
-     * 用于按分钟数去重（替代永久去重）。
+     * 查询某监控配置在最近 minutes 分钟内已推送过的记录（仅取 storeId/promotionId 两列）。
+     * 用于 MINIMUM_PAY 批量去重：调用方组装 (storeId, promotionId) 集合后内存比对，
+     * 消除逐店单查的 N+1。配合覆盖索引 (notify_config_id, create_time, store_id, promotion_id) 走 index-only。
      */
-    StorePushedHistoryEntity findByNotifyIdAndStoreIdWithinMinutes(Integer notifyId, Integer storeId, int minutes);
+    List<StorePushedHistoryEntity> findPushedWithinMinutes(Integer notifyId, int minutes);
 
     /**
      * 删除某监控配置下、创建时间早于 now-N 分钟的推送记录（物理删除）。
