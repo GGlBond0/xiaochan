@@ -34,8 +34,9 @@ import java.util.concurrent.Executors;
  *  - 在时段内（start <= now < end）：建占位(auto=1)，不注册 cron、不进前端列表，异步直接 doGrab("AUTO")。
  *  - 已过期（now >= end）：跳过。
  *
- * 防重（立即抢）：同 userId + promotionId + 当天 + auto=1 且 lastGrabTime IS NULL 且 lastResult IS NULL
- *  的占位存在则跳过（完全未触碰的占位才挡）。doGrab 前先把 lastResult 置"执行中"，确保即使回调失败也阻止重复抢。
+ * 防重（立即抢）：同 userId + promotionId + 当天 + auto=1 且 lastGrabTime IS NULL 的占位存在则跳过。
+ *  执行前置 lastResult="执行中" 仅作占位状态展示，不参与防重判定；防重键是 lastGrabTime：
+ *  占位落库时 lastGrabTime=NULL（挡二次命中），doGrab 成功/失败/异常回调均补写 lastGrabTime → 放行后续命中。
  *
  * 登录态过期：跳过建任务并推送提醒。
  */
@@ -45,7 +46,7 @@ public class AutoGrabServiceImpl implements AutoGrabService {
 
     /** 美团平台 type 值 */
     private static final int PLATFORM_MEITUAN = 1;
-    /** 占位"执行中"标记，防重看 lastResult IS NULL，执行前置此值避免回调失败导致重复抢 */
+    /** 占位"执行中"标记，仅作状态展示；防重键是 lastGrabTime（见类注释） */
     private static final String RUNNING_MARK = "执行中";
 
     @Resource

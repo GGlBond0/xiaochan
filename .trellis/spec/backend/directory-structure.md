@@ -66,5 +66,5 @@ src/main/java/io/github/xiaocan/
 
 - 标准分层范例：`LocationController` → `LocationService`/`LocationServiceImpl` → `LocationMapper` → `LocationEntity`，DTO `LocationDTO`，VO `LocationVO`。
 - 调度任务范例：`MonitorCronScheduler`（动态 cron）+ `BaseTask`/`StoreTask`/`MinimumPayService`（模板方法任务）。
-- 跨子系统桥接范例：`AutoGrabService`（监控命中 → 自动建抢单任务）——在 `BaseTask.runSingle` 命中后接入，组装 `GrabConfigEntity` 并 `GrabCronScheduler.refresh` 注册调度，连接"监控"与"抢单"两个独立子系统而不耦合各自内部逻辑。
+- 跨子系统桥接范例：`AutoGrabService`（监控命中 → 自动建抢单任务）——在 `BaseTask.runSingle` 命中后接入，按活动时段分两支：定时抢建 `grab_config(auto=0)` + `GrabCronScheduler.refresh` 注册调度；立即抢落 `grab_config(auto=1)` 占位后**异步直接 `doGrab("AUTO")`，不注册 cron**（详见 `GrabCronScheduler` 的 executeAt gotcha 与 `grab_config.auto` 约定）。连接"监控"与"抢单"两个独立子系统而不耦合各自内部逻辑。
 - 外部 HTTP 范例：`XiaochanHttp`（上游小蚕网关，经 `ProxyHolder` 代理）。

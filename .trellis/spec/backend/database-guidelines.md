@@ -48,7 +48,7 @@ ORM 用 MyBatis-Plus 3.5.9（`mybatis-plus-spring-boot3-starter`）+ MySQL（`my
 - 事务：service 写操作加 `@Transactional(rollbackFor = Exception.class)`（见 `LocationServiceImpl`）。
 - JDBC URL 必须含 `allowPublicKeyRetrieval=true`，否则 MySQL 重启后 caching_sha2 缓存清空会导致连接失败（事故教训，见 `application.yaml`）。
 - 跨表关联：本项目**不用**联表查询，用多次查询 + 内存组装。
-- **当天去重模式**：定时/触发类任务要"同一业务对象一天只处理一次"时，用 `apply("DATE(create_time) = CURDATE()")` 配合 `lambdaQuery().eq(...).count() > 0` 判断。例：`AutoGrabServiceImpl` 防重 `grab_config` 同 `user_id + promotion_id + 当天 + ENABLE` 已存在则跳过，避免监控每轮命中重复建任务。依赖表的 `create_time` 字段（MP 自动填充）。
+- **当天去重模式**：定时/触发类任务要"同一业务对象一天只处理一次"时，用 `apply("DATE(create_time) = CURDATE()")` 配合 `lambdaQuery().eq(...).count() > 0` 判断。依赖表的 `create_time` 字段（MP 自动填充）。**防重键要选"会被执行后改写"的字段**，否则占位会永久挡后续命中（见下方 `grab_config.auto` 约定的"已消费"语义教训）。
 
 ---
 
@@ -59,6 +59,56 @@ ORM 用 MyBatis-Plus 3.5.9（`mybatis-plus-spring-boot3-starter`）+ MySQL（`my
 - `grab_login_state_id int NULL`：自动抢单所用登录态，逻辑外键指向 `login_state.id`（统一登录态池，抢单/霸王餐共用）。
 
 `autoGrab=false` 时 `grab_login_state_id` 在 `MonitoryConfigServiceImpl.addUpdateConfig` 里强制置 null（避免脏数据）；`copyProperties(dto, entity)` 在置 null 之后执行，不会反向覆盖。仅在美团(type=1)活动命中时建任务（决策A，上游 `grabPromotionQuota` 的 `store_platform` 写死 1）。
+
+---
+
+## Convention: grab_config.auto 标记 + 立即抢异步直连 + 活动快照
+
+`grab_config` 新增 5 列（2026-07-15，task 07-15-monitor-grab-fix-and-display）：
+- `auto tinyint(1) DEFAULT 0`：1=监控自动抢单(立即抢)产生的占位，**不进前端列表、不注册 cron**；0=手动/定时抢任务，正常展示。
+- `store_name` / `promo_detail` / `start_time` / `end_time`：建任务时的**活动快照**（来自 `StoreInfo`），供抢单页展示，避免历史任务因 `promotion_id` 每日变化而查不到活动信息。
+
+### Gotcha: GrabCronScheduler 的 executeAt 必须**严格在未来**
+
+`GrabCronScheduler.schedule` 对一次性任务要求 `executeAt.minus(leadMs)` 转的 Instant `isAfter(Instant.now())`，否则记「executeAt 已过期，跳过」直接不调度。
+
+> **Warning**: 不要用 `executeAt = LocalDateTime.now()` 表达"立即执行"——从 `save` 到 `refresh` 之间已过几毫秒，executeAt 就成了过去时刻，会被判过期跳过 → **任务建了永不抢**。且这条 ENABLE 僵尸会持续命中当天去重，把后续命中也永久挡住。
+
+"立即执行"的正确做法是**不走 cron**：落 `auto=1` 占位后异步直接 `grabService.doGrab(config, "AUTO")`（独立 `ExecutorService`，避免阻塞 monitor-cron 线程），不调 `GrabCronScheduler.refresh`。
+
+### 防重键用"已消费"字段（lastGrabTime），不要用启动前就置非空的字段
+
+立即抢占位落库时会先置 `last_result="执行中"` 作状态展示。若防重条件含 `last_result IS NULL`，则该占位因 `last_result` 非空而**查不到** → 二次命中会再建占位重复抢。
+
+正确：防重只看 `last_grab_time IS NULL`（执行前为空 → 挡二次命中；`doGrab` 成功内部写 lastGrabTime，失败/异常回调补写 lastGrabTime → 放行后续当天命中）。占位在**所有三种 doGrab 结局**（成功/失败/异常）下都要写 lastGrabTime，否则会永久挡。
+
+### Validation & Error Matrix
+- `auto=1` 记录被 `GrabServiceImpl.listByUserId` 的 `.ne(auto, true)` 过滤，不返回给前端列表（AC3）。
+- 手动建任务（`addUpdateConfig`）`auto` 默认 0/null，`BeanUtils.copyProperties(dto, entity)` 会把 DTO 的快照字段拷进 entity。
+- 异步 `doGrab` 在无 HTTP 上下文的线程池执行，必须用 `config.getUserId()` / `config.getLoginStateId()` 显式取，不可 `getByCurrentRequest()`（见 `error-handling.md`）。
+
+### Wrong vs Correct
+
+#### Wrong（旧版 bug，2026-07-15 生产事故）
+```java
+LocalDateTime executeAt = now;            // 立即抢设 now
+entity.setExecuteAt(executeAt);
+grabService.save(entity);
+grabCronScheduler.refresh(entity.getId()); // 判 now 已过期 → 跳过，永不抢
+// 且防重 count 用 lastResult IS NULL，但占位已置"执行中" → 二次命中查不到 → 重复抢
+```
+
+#### Correct
+```java
+entity.setAuto(true); entity.setLastResult("执行中");
+grabService.save(entity);                 // auto=1 占位
+grabExecutor.submit(() -> {               // 独立线程池，不阻塞 monitor-cron
+    var r = grabService.doGrab(latest, "AUTO");   // 不走 cron，直接执行
+    if (r == null || !r.isSuccess())
+        lambdaUpdate().set(lastGrabTime, now).update(); // 失败/异常补写"已消费"
+});
+// 防重：count auto=1 + 当天 + lastGrabTime IS NULL  → 挡二次命中
+```
 
 ---
 
