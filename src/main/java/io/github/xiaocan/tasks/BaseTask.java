@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -96,6 +97,16 @@ public class BaseTask {
             cleanupExpired(notifyConfig);
             List<StoreInfo> storeInfos = fetchStoreInfos(notifyConfig, execHistory, location);
             List<StoreInfo> availableStores = filterStoreInfos(notifyConfig, storeInfos);
+            // 过滤掉当前已超过店铺营业时间（打烊）的活动：即使抢单成功也无法使用，最后还是要取消
+            List<StoreInfo> openStores = availableStores.stream()
+                    .filter(this::withinOpenHours)
+                    .toList();
+            int droppedByClosed = availableStores.size() - openStores.size();
+            if (droppedByClosed > 0) {
+                log.info("configId: {} 过滤掉{}个已打烊门店活动（当前时间超过店铺营业时间）",
+                        notifyConfig.getId(), droppedByClosed);
+            }
+            availableStores = openStores;
             if(availableStores.isEmpty()){
                 log.info("configId: {} 没有满足条件的门店活动", notifyConfig.getId());
                 execHistory.setRemark("没有满足条件的门店活动");
@@ -130,6 +141,35 @@ public class BaseTask {
     protected List<StoreInfo> filterStoreInfos(MonitorConfigEntity notifyConfig,
                                                List<StoreInfo> storeInfos){
         throw new UnsupportedOperationException("不支持的调用");
+    }
+
+    /**
+     * 判断当前时间是否仍在店铺营业时间内。
+     * 营业时间格式形如 "10:00-22:00"；空/格式不符视为仍营业（不误杀）。
+     * 仅在"已打烊"（当前时间 >= 闭店时间）时过滤；未开门时段照常推送，因当天仍会开门、活动可能有效。
+     */
+    protected boolean withinOpenHours(StoreInfo storeInfo) {
+        String openHours = storeInfo.getOpenHours();
+        if (!StringUtils.hasText(openHours) || !openHours.contains("-")) {
+            return true;
+        }
+        String[] parts = openHours.split("-", 2);
+        try {
+            LocalTime closeTime = LocalTime.parse(parts[1].trim());
+            // 跨天营业（如 22:00-06:00）：闭店早于开门，说明营业横跨到次日清晨，
+            // 此时仅当当前时间已超过次日打烊点（即 < closeTime）才视为打烊。
+            LocalTime openTime = LocalTime.parse(parts[0].trim());
+            LocalTime now = LocalTime.now();
+            if (!closeTime.isAfter(openTime)) {
+                // 跨天：营业中 => now >= openTime 或 now < closeTime；打烊 => 其它
+                return now.isAfter(openTime) || now.isBefore(closeTime) || now.equals(openTime);
+            }
+            // 普通同日营业：仅 now < closeTime 才在营业；未开门(now < openTime)照常推送，故仅按 closeTime 判定
+            return now.isBefore(closeTime);
+        } catch (Exception e) {
+            log.warn("解析营业时间失败，跳过过滤 openHours={}: {}", openHours, e.getMessage());
+            return true;
+        }
     }
 
     /**
