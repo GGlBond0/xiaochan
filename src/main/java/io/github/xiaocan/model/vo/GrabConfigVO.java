@@ -27,5 +27,13 @@ public class GrabConfigVO {
     private String lastResult;
     private LocalDateTime lastGrabTime;
     private Long promotionOrderId;
+    /** 活动快照：商家名 */
+    private String storeName;
+    /** 活动快照：优惠明细 */
+    private String promoDetail;
+    /** 活动快照：活动时段开始 HH:MM */
+    private String startTime;
+    /** 活动快照：活动时段结束 HH:MM */
+    private String endTime;
     private LocalDateTime createTime;
 }

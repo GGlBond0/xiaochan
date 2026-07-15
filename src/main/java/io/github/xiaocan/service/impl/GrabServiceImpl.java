@@ -112,7 +112,9 @@ public class GrabServiceImpl extends ServiceImpl<GrabConfigMapper, GrabConfigEnt
     @Override
     public List<GrabConfigVO> listByUserId() {
         Integer uid = userService.getByCurrentRequest().getId();
+        // 过滤监控自动抢单(立即抢)产生的占位记录(auto=1)，它们不展示在前端抢单列表中
         return this.lambdaQuery().eq(GrabConfigEntity::getUserId, uid)
+                .ne(GrabConfigEntity::getAuto, true)
                 .orderByDesc(GrabConfigEntity::getId).list().stream().map(e -> {
                     GrabConfigVO vo = new GrabConfigVO();
                     BeanUtils.copyProperties(e, vo);

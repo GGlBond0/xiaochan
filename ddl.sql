@@ -358,3 +358,15 @@ FROM `lottery_auth`;
 ALTER TABLE `monitor_config`
   ADD COLUMN `auto_grab` tinyint(1) NOT NULL DEFAULT 0 COMMENT '命中后自动建抢单任务: 0-否, 1-是',
   ADD COLUMN `grab_login_state_id` int NULL DEFAULT NULL COMMENT '自动抢单所用登录态id, 指向 login_state.id';
+
+-- ============================
+-- 抢单配置：自动抢单标记 + 活动快照字段 (2026-07-15, task 07-15-monitor-grab-fix-and-display)
+-- auto: 监控自动抢单(立即抢)产生的占位记录标记为1，不展示在前端抢单列表、不注册cron。
+--       定时抢/手动建为0，正常展示。store_name/promo_detail/start_time/end_time 为建任务时的活动快照。
+-- ============================
+ALTER TABLE `grab_config`
+  ADD COLUMN `auto` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否监控自动抢单产生: 0-否(手动/定时), 1-是(立即抢,不进前端列表)',
+  ADD COLUMN `store_name` varchar(128) NULL DEFAULT NULL COMMENT '活动快照: 商家名',
+  ADD COLUMN `promo_detail` varchar(64) NULL DEFAULT NULL COMMENT '活动快照: 优惠明细 如 满20返15',
+  ADD COLUMN `start_time` varchar(8) NULL DEFAULT NULL COMMENT '活动快照: 时段开始 HH:MM',
+  ADD COLUMN `end_time` varchar(8) NULL DEFAULT NULL COMMENT '活动快照: 时段结束 HH:MM';

@@ -87,6 +87,26 @@ public class GrabConfigEntity {
      */
     private Long promotionOrderId;
     /**
+     * 是否监控自动抢单产生：0-否(手动/定时)，1-是(立即抢，不进前端列表、不注册cron)
+     */
+    private Boolean auto;
+    /**
+     * 活动快照：商家名
+     */
+    private String storeName;
+    /**
+     * 活动快照：优惠明细，如 满20返15
+     */
+    private String promoDetail;
+    /**
+     * 活动快照：活动时段开始 HH:MM
+     */
+    private String startTime;
+    /**
+     * 活动快照：活动时段结束 HH:MM
+     */
+    private String endTime;
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

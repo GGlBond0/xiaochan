@@ -49,4 +49,12 @@ public class GrabConfigDTO {
     private Integer maxRetry;
     private Integer retryIntervalMs;
     private MonitorConfigStatusEnums status;
+    /** 活动快照：商家名（前端"从活动列表选"带入，可选） */
+    private String storeName;
+    /** 活动快照：优惠明细，如 满20返15 */
+    private String promoDetail;
+    /** 活动快照：活动时段开始 HH:MM */
+    private String startTime;
+    /** 活动快照：活动时段结束 HH:MM */
+    private String endTime;
 }
