@@ -2,6 +2,7 @@ package io.github.xiaocan.service.impl;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import io.github.xiaocan.config.BusinessException;
 import io.github.xiaocan.http.GrabAuth;
 import io.github.xiaocan.http.LotteryAuth;
@@ -311,6 +312,31 @@ public class LoginStateServiceImpl implements LoginStateService {
             throw new BusinessException("无权操作该登录态");
         }
         return entity;
+    }
+
+    @Override
+    public void bindLocation(Integer id, Long locationId) {
+        UserEntity user = userService.getByCurrentRequest();
+        LoginStateEntity entity = loginStateMapper.selectById(id);
+        if (entity == null || !entity.getUserId().equals(user.getId())) {
+            throw new BusinessException("无权操作该登录态");
+        }
+        Long target = null;
+        if (locationId != null) {
+            LocationEntity loc = locationService.getById(locationId);
+            if (loc == null || !loc.getUserId().equals(user.getId())) {
+                throw new BusinessException("无权绑定该地址");
+            }
+            target = locationId;
+        }
+        // 只更新 location_id 一列，不触碰 sivir/sessionId/rawHeaders 等明文字段。
+        // 用 UpdateWrapper.set 显式写入（含 null），否则 updateById 会忽略 null 字段，
+        // 解绑时无 SET 列导致 SQL 语法错。
+        loginStateMapper.update(null,
+                new LambdaUpdateWrapper<LoginStateEntity>()
+                        .eq(LoginStateEntity::getId, id)
+                        .set(LoginStateEntity::getLocationId, target));
+        log.info("登录态绑定地址 id={}, locationId={}", id, target);
     }
 
     @Override

@@ -63,3 +63,28 @@ $primary: #...;
 - 不要用 Options API——统一 `<script setup lang="ts">`。
 - 样式穿透 `el-dialog`/`el-select` 弹层（append-to-body）需用非 scoped style 块或 `:deep()`，见 `HomeView.vue` 末尾非 scoped 块。
 - Element Plus 组件已全量注册，无需在各组件局部注册。
+
+---
+
+## Convention: 登录态"选择已有"下拉（统一池引用）
+
+登录态明文（抓包 header）只在 `/login-state` 管理页录入，其它业务页一律**下拉选择已有登录态**，不再各自粘贴 header。
+
+**统一加载**：`api.get('/api/login-state/list')` → `loginStateList`（VO 字段 `userVayne` 非 `xcUserId`，含 `expireStatus`/`locationId`/`locationName`）。
+
+**表单内下拉**（参照 `GrabConfigView.vue`）：
+```html
+<el-form-item label="登录态" prop="loginStateId">
+  <el-select v-model="form.loginStateId" placeholder="..." style="width:100%">
+    <el-option v-for="s in loginStateList" :key="s.id"
+      :label="`${s.name}（用户${s.userVayne}${s.expireStatus==='已过期'?'/已过期':''}）`" :value="s.id" />
+  </el-select>
+  <div class="hint" v-if="loginStateList.length===0">未录入登录态，请先到「登录态管理」页面新增</div>
+</el-form-item>
+```
+
+**地址页绑定/解绑**（`LocationView.vue`，2026-07-16 task 07-16-addr-login-state-select）：
+- 地址卡片"+ 绑定登录态"对话框是 `el-select`（非 textarea 粘贴 header）。
+- `availableLoginStates(locId)` = `loginStateList.filter(s => s.locationId==null || String(s.locationId)===String(locId))`——只列未绑定到其它地址的（一条登录态只能绑一个地址，`location_id` 单值）。
+- 绑定调 `api.put('/api/login-state/'+id+'/location', null, {params:{locationId}})`；解绑调 `api.put('/api/login-state/'+id+'/location')`（不带 locationId）。后端只改 `location_id`，不动明文。
+- 已绑该地址的登录态行提供"解绑"按钮（移回未绑定池，不删登录态）。

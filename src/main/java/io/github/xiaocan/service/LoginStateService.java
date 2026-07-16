@@ -47,6 +47,13 @@ public interface LoginStateService {
     LoginStateEntity getByIdAndOwner(Integer id);
 
     /**
+     * 绑定/解绑登录态到地址。只改 location_id，不动登录态明文。
+     * @param id 登录态 id（归属当前请求用户，无权抛 BusinessException）
+     * @param locationId 地址 id；null 表示解绑。非空时必须归属当前用户。
+     */
+    void bindLocation(Integer id, Long locationId);
+
+    /**
      * 转为抢单登录态（GrabAuth）。null 表示不存在或无权。
      */
     GrabAuth toGrabAuth(Integer id);

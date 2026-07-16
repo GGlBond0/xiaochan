@@ -46,6 +46,7 @@ ORM 用 MyBatis-Plus 3.5.9（`mybatis-plus-spring-boot3-starter`）+ MySQL（`my
 - **不要给 DTO/VO 加 `@TableName`/`@TableId`**——既有 `LocationDTO`/`LocationVO` 误带持久化注解，是技术债，新代码勿重复。
 - mapper 名与实体名可不一致（`NotifyConfigMapper`→`MonitorConfigEntity`），新增时尽量保持一致以避免混淆。
 - 事务：service 写操作加 `@Transactional(rollbackFor = Exception.class)`（见 `LocationServiceImpl`）。
+- **`updateById` 会忽略 null 字段，不能用它"把某列设回 null"**（2026-07-16，task 07-16-addr-login-state-select）。MyBatis-Plus 默认 `FieldStrategy=NOT_NULL`，patch 实体只 set id + 一个 null 值字段时，生成的 SQL 没有 SET 子句 → `UPDATE tbl WHERE id=? AND deleted=0` 语法错。要置 null 必须用 `LambdaUpdateWrapper.set(Field, null)` 显式写：`mapper.update(null, new LambdaUpdateWrapper<XxxEntity>().eq(id).set(field, null))`。本次 `LoginStateService.bindLocation` 解绑（`location_id=null`）即此坑。
 - JDBC URL 必须含 `allowPublicKeyRetrieval=true`，否则 MySQL 重启后 caching_sha2 缓存清空会导致连接失败（事故教训，见 `application.yaml`）。
 - 跨表关联：本项目**不用**联表查询，用多次查询 + 内存组装。
 - **当天去重模式**：定时/触发类任务要"同一业务对象一天只处理一次"时，用 `apply("DATE(create_time) = CURDATE()")` 配合 `lambdaQuery().eq(...).count() > 0` 判断。依赖表的 `create_time` 字段（MP 自动填充）。**防重键要选"会被执行后改写"的字段**，否则占位会永久挡后续命中（见下方 `grab_config.auto` 约定的"已消费"语义教训）。

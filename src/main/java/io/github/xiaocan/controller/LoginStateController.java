@@ -52,4 +52,16 @@ public class LoginStateController {
         loginStateService.delete(id);
         return BaseResult.ok();
     }
+
+    /**
+     * 绑定/解绑登录态到地址。只改所属地址，不改登录态明文。
+     * @param id 登录态 id
+     * @param locationId 地址 id；不传或传 null 表示解绑
+     */
+    @PutMapping("/{id}/location")
+    public BaseResult<Void> bindLocation(@PathVariable Integer id,
+                                          @RequestParam(required = false) Long locationId) {
+        loginStateService.bindLocation(id, locationId);
+        return BaseResult.ok();
+    }
 }
