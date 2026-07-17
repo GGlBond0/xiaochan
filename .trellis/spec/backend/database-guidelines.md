@@ -84,6 +84,16 @@ ORM 用 MyBatis-Plus 3.5.9（`mybatis-plus-spring-boot3-starter`）+ MySQL（`my
 
 正确：防重只看 `last_grab_time IS NULL`（执行前为空 → 挡二次命中；`doGrab` 成功内部写 lastGrabTime，失败/异常回调补写 lastGrabTime → 放行后续当天命中）。占位在**所有三种 doGrab 结局**（成功/失败/异常）下都要写 lastGrabTime，否则会永久挡。
 
+### SINGLE 模式必须有"活动级"成功防重，账号级防重挡不住换号（2026-07-17 事故）
+
+监控自动抢单 `GrabMode=SINGLE`（抢一个名额）下，`hasPlaceholder` 的防重键带 `login_state_id`，是**账号级**防重：只挡"同一账号重复抢同一活动"。但 SINGLE 的换号逻辑（`shouldSwitchAccount` 对 code==70/饭票不足/登录态过期返回 true）会换到下一账号继续抢**同一活动**。
+
+账号级防重在成功后**失效**：account=1 抢成功 → doGrab 回写 lastGrabTime + status=DISABLE → `hasPlaceholder` 查不到 account=1 占位（lastGrabTime 已非空）→ 下次命中重新让 account=1 试 → 撞上游 code=11/饭票不足 → 换号 account=2 → **抢成第 2 个名额**，违反 SINGLE 语义。实锤：2026-07-17 活动 118779162，两账号各抢一个名额。
+
+**SINGLE 必须在抢之前做活动级成功预检**：查当天 `auto=1 AND status=DISABLE AND last_result LIKE '成功%'` 的 promotionId 集合，命中即整组跳过，不再换号补抢。用 `status=DISABLE` 双重锁定（成功才 DISABLE，失败保持 ENABLE）避免失败记录误判；`LIKE '成功%'` 兼容美团（`成功 orderId=..`）与饿了么/京东（`成功`）。
+
+**ALL 模式不做此预检**：ALL 语义是每账号各抢一个名额，账号间独立不互挡，账号级（无）防重即正确。两种模式的防重粒度不同，勿在 ALL 上套活动级预检。
+
 ### Validation & Error Matrix
 - `auto=1` 记录被 `GrabServiceImpl.listByUserId` 的 `.ne(auto, true)` 过滤，不返回给前端列表（AC3）。
 - 手动建任务（`addUpdateConfig`）`auto` 默认 0/null，`BeanUtils.copyProperties(dto, entity)` 会把 DTO 的快照字段拷进 entity。
