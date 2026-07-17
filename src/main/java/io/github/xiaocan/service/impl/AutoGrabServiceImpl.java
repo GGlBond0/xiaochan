@@ -26,8 +26,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 /**
  * 监控命中后自动抢单实现（多账号多平台优先级轮询）。
@@ -113,6 +116,24 @@ public class AutoGrabServiceImpl implements AutoGrabService {
         }
 
         // SINGLE：立即抢内存循环（同步在 grabExecutor 内换号/降级）
+        // 活动级成功防重：当天已抢成功(任意账号)的 promotionId 整组跳过，
+        // 避免换号补抢同一活动导致 SINGLE 抢出多个名额（见 prd 根因）。
+        Set<Integer> grabbed = grabbedSuccessPromotionIds(userId);
+        if (!grabbed.isEmpty()) {
+            List<StoreInfo> filtered = new ArrayList<>();
+            for (StoreInfo s : orderedCombos) {
+                if (s.getPromotionId() == null || !grabbed.contains(s.getPromotionId())) {
+                    filtered.add(s);
+                }
+            }
+            if (filtered.isEmpty()) {
+                log.info("自动抢单跳过(活动已抢成功): userId={}, configId={}", userId, config.getId());
+                return null;
+            }
+            final List<StoreInfo> combos = filtered;
+            grabExecutor.submit(() -> runSingle(config, userId, validAccounts, combos, 0, 0));
+            return null;
+        }
         final List<StoreInfo> combos = orderedCombos;
         grabExecutor.submit(() -> runSingle(config, userId, validAccounts, combos, 0, 0));
         return null;
@@ -387,6 +408,26 @@ public class AutoGrabServiceImpl implements AutoGrabService {
                 .isNull(GrabConfigEntity::getLastGrabTime)
                 .count();
         return c > 0;
+    }
+
+    /**
+     * SINGLE 活动级成功防重：返回当天已被本配置以任意账号抢成功的 promotionId 集合。
+     * 判定：grab_config 当天、auto=true、status=DISABLE、lastResult like '成功%'。
+     * 兼容美团(成功 orderId=..)与饿了么/京东(成功)；status=DISABLE 双重锁定，避免失败记录误判。
+     */
+    private Set<Integer> grabbedSuccessPromotionIds(Integer userId) {
+        List<GrabConfigEntity> rows = grabService.lambdaQuery()
+                .select(GrabConfigEntity::getPromotionId)
+                .eq(GrabConfigEntity::getUserId, userId)
+                .eq(GrabConfigEntity::getAuto, true)
+                .eq(GrabConfigEntity::getStatus, MonitorConfigStatusEnums.DISABLE)
+                .likeRight(GrabConfigEntity::getLastResult, "成功")
+                .apply("DATE(create_time) = CURDATE()")
+                .list();
+        return rows.stream()
+                .map(GrabConfigEntity::getPromotionId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     /** 失败兜底：回写 lastGrabTime 标记已消费，更新 lastResult。 */
