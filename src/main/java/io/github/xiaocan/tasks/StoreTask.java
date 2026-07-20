@@ -165,15 +165,6 @@ public class StoreTask extends BaseTask {
         }
     }
 
-    @Override
-    protected void afterSuccess(MonitorConfigEntity notifyConfig, List<StoreInfo> availableStores) {
-        super.afterSuccess(notifyConfig, availableStores);
-        // 仅 STORE_ACTIVITY 通知后停用，STORE_KEYWORD 继续运行
-        if (!availableStores.isEmpty() && notifyConfig.getType() == MonitorTypeEnums.STORE_ACTIVITY) {
-            monitoryConfigService.toggleStatus(notifyConfig.getId(), MonitorConfigStatusEnums.DISABLE);
-        }
-    }
-
     /**
      * 仅 STORE_KEYWORD 清理过期推送记录：删除本配置 N 分钟（用户全局去重分钟数）前的历史，
      * 无命中也每次执行都清，避免历史无限堆积，并使同店在过期后能再次被通知。
