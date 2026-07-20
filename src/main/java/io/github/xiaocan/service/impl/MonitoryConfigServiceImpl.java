@@ -23,6 +23,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -44,6 +47,28 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
     @Resource
     @Lazy
     private LoginStateService loginStateService;
+
+    /**
+     * scheduler 副作用（refresh/cancel）推迟到当前事务提交后执行，确保 refresh 内 getById
+     * 读到已提交配置；无事务上下文时降级立即执行（防御，正常路径均在事务内）。
+     * 事务回滚时 afterCommit 不执行 → scheduler 不被改动，与 DB 回滚保持一致。
+     */
+    private void afterCommit(Runnable schedulerAction) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        schedulerAction.run();
+                    } catch (Exception e) {
+                        log.error("afterCommit scheduler 副作用执行异常", e);
+                    }
+                }
+            });
+        } else {
+            schedulerAction.run();
+        }
+    }
 
     @Override
     public List<NotifyConfigVO> listByUserId() {
@@ -99,6 +124,7 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void addUpdateConfig(monitorConfigDTO dto) {
         log.info("保存通知配置请求: {}", dto);
         // cron 表达式校验
@@ -174,48 +200,56 @@ public class MonitoryConfigServiceImpl extends ServiceImpl<NotifyConfigMapper, M
             entity.setExtConfig(JSONObject.toJSONString(dto.getMinimumPayExtNotifyConfig()));
         }
         saveOrUpdate(entity);
-        // 配置变更后刷新 cron 调度
-        monitorCronScheduler.refresh(entity.getId());
+        // 配置变更后刷新 cron 调度：推迟到事务提交后，确保 refresh 内 getById 读到已提交配置
+        afterCommit(() -> monitorCronScheduler.refresh(entity.getId()));
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateConfig(int id, MonitorConfigStatusEnums statusEnums, String remark) {
         this.lambdaUpdate()
                 .eq(MonitorConfigEntity::getId, id)
                 .set(MonitorConfigEntity::getStatus, statusEnums)
                 .set(MonitorConfigEntity::getRemark, remark)
                 .update();
-        monitorCronScheduler.refresh(id);
+        afterCommit(() -> monitorCronScheduler.refresh(id));
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteById(Integer configId) {
         this.lambdaUpdate()
                 .eq(MonitorConfigEntity::getId, configId)
                 .eq(MonitorConfigEntity::getUserId, userService.getByCurrentRequest().getId())
                 .remove();
-        monitorCronScheduler.cancel(configId);
+        afterCommit(() -> monitorCronScheduler.cancel(configId));
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteByLocationId(Integer locationId) {
-        // 先取消相关调度任务
-        this.lambdaQuery()
+        // 事务内读出待删配置 id，删除后 afterCommit 取消调度（cancel 不读 DB，只取消内存调度）
+        java.util.List<Integer> configIds = this.lambdaQuery()
+                .select(MonitorConfigEntity::getId)
                 .eq(MonitorConfigEntity::getLocationId, locationId)
                 .list()
-                .forEach(config -> monitorCronScheduler.cancel(config.getId()));
+                .stream()
+                .map(MonitorConfigEntity::getId)
+                .toList();
         this.lambdaUpdate()
                 .eq(MonitorConfigEntity::getLocationId, locationId)
                 .remove();
+        afterCommit(() -> configIds.forEach(id -> monitorCronScheduler.cancel(id)));
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void toggleStatus(Integer configId, MonitorConfigStatusEnums status) {
         this.lambdaUpdate()
                 .eq(MonitorConfigEntity::getId, configId)
                 .set(MonitorConfigEntity::getStatus, status)
                 .update();
-        monitorCronScheduler.refresh(configId);
+        afterCommit(() -> monitorCronScheduler.refresh(configId));
     }
 
     /**
