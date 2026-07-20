@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
-- **Last Active**: 2026-07-17
+- **Total Sessions**: 21
+- **Last Active**: 2026-07-20
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~717 | Active |
+| `journal-1.md` | ~750 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-07-20 | STORE_KEYWORD分钟级去重收尾 | `3ecfd6e` | `main` |
 | 20 | 2026-07-17 | SINGLE模式活动级成功防重修复+部署 | `3ed28c7`, `44643a9` | `main` |
 | 19 | 2026-07-17 | 自动抢单支持饿了么/京东平台并按平台勾选 | `016c559` | `main` |
 | 18 | 2026-07-15 | 监控自动抢单修复与抢单页活动信息展示 | `92c6f72`, `8dd9b95`, `49498fd`, `1a27f90` | `main` |
