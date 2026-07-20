@@ -1,0 +1,30 @@
+{
+  "id": "full-audit-xiaocan",
+  "name": "full-audit-xiaocan",
+  "title": "全面审查小蚕项目",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "lz",
+  "assignee": "lz",
+  "createdAt": "2026-07-20",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-20-audit-code-quality",
+    "07-20-audit-feature-completeness",
+    "07-20-audit-prod-health"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
