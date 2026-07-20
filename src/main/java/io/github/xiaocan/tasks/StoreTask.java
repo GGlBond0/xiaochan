@@ -8,11 +8,13 @@ import io.github.xiaocan.model.entity.LocationEntity;
 import io.github.xiaocan.model.entity.MonitorConfigEntity;
 import io.github.xiaocan.model.entity.StorePushedHistoryEntity;
 import io.github.xiaocan.model.entity.TaskExecHistoryEntity;
+import io.github.xiaocan.model.entity.UserEntity;
 import io.github.xiaocan.model.enums.MonitorConfigStatusEnums;
 import io.github.xiaocan.model.enums.MonitorTypeEnums;
 import io.github.xiaocan.http.MerchantBlacklistHolder;
 import io.github.xiaocan.service.MonitoryConfigService;
 import io.github.xiaocan.service.StorePushedHistoryService;
+import io.github.xiaocan.service.UserService;
 import io.github.xiaocan.service.XiaoChanService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * @author wangxiaodong
@@ -37,6 +41,20 @@ public class StoreTask extends BaseTask {
     private MonitoryConfigService monitoryConfigService;
     @Resource
     private StorePushedHistoryService storePushedHistoryService;
+    @Resource
+    private UserService userService;
+
+    /** 取该配置所属用户的全局去重/过期分钟数，null 兜底 60。与 MinimumPayService 一致。 */
+    private int dedupMinutesOf(MonitorConfigEntity notifyConfig) {
+        UserEntity user = userService.getById(notifyConfig.getUserId());
+        if (user == null || user.getNotifyDedupMinutes() == null) return 60;
+        return user.getNotifyDedupMinutes();
+    }
+
+    /** 去重键：storeId + promotionId。promotionId 为 null 时占位 "null"，避免与有值活动混淆。 */
+    private static String dedupKey(Integer storeId, Integer promotionId) {
+        return storeId + ":" + (promotionId == null ? "null" : promotionId);
+    }
 
 
     /**
@@ -125,8 +143,15 @@ public class StoreTask extends BaseTask {
                     .filter(storeInfo -> storeInfo.getPrice().compareTo(storeExtNotifyConfig.getStoreInfo().getPrice()) <= 0)
                     .toList();
         } else {
-            // STORE_KEYWORD：过滤有库存 + 距离限制 + 排除已通知过的门店（按配置ID + 门店ID）
+            // STORE_KEYWORD：过滤有库存 + 距离限制 + 排除已通知过的门店
             StoreKeywordExtNotifyConfig storeKeywordExtNotifyConfig = JSON.parseObject(notifyConfig.getExtConfig(), StoreKeywordExtNotifyConfig.class);
+            // 批量去重：一次取本配置最近 dedupMin 分钟内已推送的 (storeId, promotionId)，内存比对，消除逐店单查。
+            // 同店同活动 N 分钟内不重复推；同店不同 promotionId 视为新活动不互相阻挡。
+            int dedupMin = dedupMinutesOf(notifyConfig);
+            Set<String> pushed = storePushedHistoryService.findPushedWithinMinutes(notifyConfig.getId(), dedupMin)
+                    .stream()
+                    .map(e -> dedupKey(e.getStoreId(), e.getPromotionId()))
+                    .collect(Collectors.toSet());
             return storeInfos.stream()
                     .filter(storeInfo -> storeInfo.getLeftNumber() > 0)
                     .filter(storeInfo -> storeKeywordExtNotifyConfig.getLimitDistance() == null
@@ -135,8 +160,7 @@ public class StoreTask extends BaseTask {
                     // 仅命中 3km 内（距离 <= 3000 米）的门店，默认 false 不生效；与 limitDistance 为 AND 关系
                     .filter(storeInfo -> !Boolean.TRUE.equals(storeKeywordExtNotifyConfig.getWithin3km())
                             || (storeInfo.getDistance() != null && storeInfo.getDistance() <= 3000))
-                    .filter(storeInfo -> storePushedHistoryService
-                            .findByNotifyIdAndStoreIdAll(notifyConfig.getId(), storeInfo.getStoreId()) == null)
+                    .filter(storeInfo -> !pushed.contains(dedupKey(storeInfo.getStoreId(), storeInfo.getPromotionId())))
                     .toList();
         }
     }
@@ -147,6 +171,27 @@ public class StoreTask extends BaseTask {
         // 仅 STORE_ACTIVITY 通知后停用，STORE_KEYWORD 继续运行
         if (!availableStores.isEmpty() && notifyConfig.getType() == MonitorTypeEnums.STORE_ACTIVITY) {
             monitoryConfigService.toggleStatus(notifyConfig.getId(), MonitorConfigStatusEnums.DISABLE);
+        }
+    }
+
+    /**
+     * 仅 STORE_KEYWORD 清理过期推送记录：删除本配置 N 分钟（用户全局去重分钟数）前的历史，
+     * 无命中也每次执行都清，避免历史无限堆积，并使同店在过期后能再次被通知。
+     * STORE_ACTIVITY 走当天去重（checkRepeat），其当天记录不应被 N 分钟清理误删，故提前 return。
+     */
+    @Override
+    protected void cleanupExpired(MonitorConfigEntity notifyConfig) {
+        if (notifyConfig.getType() != MonitorTypeEnums.STORE_KEYWORD) {
+            return;
+        }
+        try {
+            int dedupMin = dedupMinutesOf(notifyConfig);
+            int deleted = storePushedHistoryService.deleteByNotifyIdOlderThanMinutes(notifyConfig.getId(), dedupMin);
+            if (deleted > 0) {
+                log.info("configId: {} 清理 {} 分钟前的过期推送记录 {} 条", notifyConfig.getId(), dedupMin, deleted);
+            }
+        } catch (Exception e) {
+            log.warn("configId: {} 清理过期推送记录失败", notifyConfig.getId(), e);
         }
     }
 }
