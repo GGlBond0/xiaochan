@@ -112,7 +112,7 @@ public class XiaoChanServiceImpl implements XiaoChanService {
             return false;
         }
         long overDistanceCount = list.stream()
-                .filter(t -> t.getDistance() > MAX_DISTANCE)
+                .filter(t -> t.getDistance() != null && t.getDistance() > MAX_DISTANCE)
                 .count();
         int size = list.size();
         //有一半的店距离超过MAX_DISTANCE，则不再查找下一页
@@ -140,8 +140,8 @@ public class XiaoChanServiceImpl implements XiaoChanService {
      */
     private void sortStoreList(List<StoreInfo> list, Integer orderType) {
         if (orderType == null || orderType == 1) {
-            // 默认排序，不处理
-            list.sort(Comparator.comparing(StoreInfo::getDistance));
+            // 默认排序，无 distance 的门店排末尾（避免 null 拆箱 NPE）
+            list.sort(Comparator.comparing(StoreInfo::getDistance, Comparator.nullsLast(Comparator.naturalOrder())));
         }else if (orderType == 2) {
             // 按返现金额倒序排序
             list.sort(Comparator.comparing(StoreInfo::getRebatePrice, Comparator.nullsLast(Comparator.reverseOrder())));
@@ -156,7 +156,7 @@ public class XiaoChanServiceImpl implements XiaoChanService {
 
     private List<StoreInfo> filter(List<StoreInfo> list, QueryListVO queryListVO) {
         if (StringUtils.isNotBlank(queryListVO.getName())) {
-            list = list.stream().filter(storeInfo -> storeInfo.getName().contains(queryListVO.getName())).toList();
+            list = list.stream().filter(storeInfo -> storeInfo.getName() != null && storeInfo.getName().contains(queryListVO.getName())).toList();
         }
 
         // 只看可抢过滤（剩余数量大于0且活动时间在当前时间范围内）

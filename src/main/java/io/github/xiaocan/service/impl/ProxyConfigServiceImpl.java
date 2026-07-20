@@ -12,6 +12,7 @@ import io.github.xiaocan.utils.SpringContextUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 代理IP池全局配置服务实现。
@@ -33,6 +34,7 @@ public class ProxyConfigServiceImpl extends ServiceImpl<ProxyConfigMapper, Proxy
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateConfig(ProxyConfigDTO dto) {
         if (Boolean.TRUE.equals(dto.getEnabled()) && (dto.getApiUrl() == null || dto.getApiUrl().trim().isEmpty())) {
             throw new BusinessException("启用代理时 API 地址必填");

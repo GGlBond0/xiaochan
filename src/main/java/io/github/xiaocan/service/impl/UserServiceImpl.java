@@ -10,6 +10,7 @@ import io.github.xiaocan.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -23,6 +24,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserEntity> impleme
     private SptService sptService;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public UserVO register(String spt, String code) {
         if (!sptService.checkSptCode(spt, code)) {
             throw new BusinessException("验证码错误");

@@ -11,6 +11,7 @@ import io.github.xiaocan.service.MerchantBlacklistService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 商家名称关键字黑名单全局配置服务实现。
@@ -32,6 +33,7 @@ public class MerchantBlacklistServiceImpl extends ServiceImpl<MerchantBlacklistM
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateConfig(MerchantBlacklistDTO dto) {
         MerchantBlacklistEntity entity = ensureRow();
         entity.setEnabled(dto.getEnabled());
