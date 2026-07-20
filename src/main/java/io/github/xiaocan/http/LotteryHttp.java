@@ -36,6 +36,12 @@ public class LotteryHttp {
     private static final String ADD_LOTTERY_METHOD = "SilkwormLotteryMobile.AddLotteryTimes";
     private static final String LOTTERY_PROGRESS_METHOD = "SilkwormLotteryMobile.GetLotteryProgress";
     /**
+     * 执行抽奖（开红包，2026-07-21 抓包确认，见
+     * .trellis/tasks/07-21-lottery-draw-redpack/prd.md）。
+     * body 带 prize_type=1，每调一次 lottery_count 减 1，返回 prize（打车券/券包/小蚕红包等）。
+     */
+    private static final String LOTTERY_METHOD = "SilkwormLotteryMobile.Lottery";
+    /**
      * 看视频/看商城完成上报（OnAdViewed，2026-07-20 抓包+H5逆向确认，见
      * .trellis/tasks/07-20-lottery-extra-tasks/research/capture-extra-tasks.md）。
      * bus_type=2 看视频(is_view_tp_ad)，bus_type=4 看商城(is_view_douyin_mall)。
@@ -99,6 +105,21 @@ public class LotteryHttp {
      */
     public JSONObject getLotteryProgress(LotteryAuth auth) {
         return postAuth(getBody(auth), LOTTERY_SERVER, LOTTERY_PROGRESS_METHOD, auth, "getLotteryProgress");
+    }
+
+    /**
+     * 执行抽奖（开红包），消费 1 次抽奖机会。
+     * <p>
+     * 抓包确认（2026-07-21）：body `{"silk_id":N,"prize_type":1}`，每调一次 lottery_count 减 1，
+     * 响应 `{"status":{"code":0},"prize":{...},"lucky_times":0,"is_lucky":false,"verify_method":0}`。
+     * prize_type 固定 1（抓包仅此值，未验证其它）。无 sign。
+     *
+     * @param auth 登录态
+     */
+    public JSONObject lottery(LotteryAuth auth) {
+        Map<String, Object> body = baseBody(auth);
+        body.put("prize_type", 1);
+        return postAuth(JSONObject.toJSONString(body), LOTTERY_SERVER, LOTTERY_METHOD, auth, "lottery");
     }
 
     /**

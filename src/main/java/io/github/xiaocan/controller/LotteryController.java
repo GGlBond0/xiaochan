@@ -1,6 +1,7 @@
 package io.github.xiaocan.controller;
 
 import io.github.xiaocan.model.BaseResult;
+import io.github.xiaocan.model.vo.LotteryDrawResultVO;
 import io.github.xiaocan.model.vo.LotteryTaskResultVO;
 import io.github.xiaocan.service.LotteryService;
 import jakarta.annotation.Resource;
@@ -24,5 +25,13 @@ public class LotteryController {
     @PostMapping("/run")
     public BaseResult<LotteryTaskResultVO> runTask(@RequestParam Integer authId) {
         return BaseResult.ok(lotteryService.runTask(authId));
+    }
+
+    /**
+     * 开红包：用攒到的抽奖次数循环执行抽奖，直到抽完或失败。
+     */
+    @PostMapping("/draw")
+    public BaseResult<LotteryDrawResultVO> draw(@RequestParam Integer authId) {
+        return BaseResult.ok(lotteryService.draw(authId));
     }
 }

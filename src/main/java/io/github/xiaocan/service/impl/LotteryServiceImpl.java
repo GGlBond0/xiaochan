@@ -4,7 +4,9 @@ import com.alibaba.fastjson2.JSONObject;
 import io.github.xiaocan.config.BusinessException;
 import io.github.xiaocan.http.LotteryAuth;
 import io.github.xiaocan.http.LotteryHttp;
+import io.github.xiaocan.model.entity.LoginStateEntity;
 import io.github.xiaocan.model.entity.UserEntity;
+import io.github.xiaocan.model.vo.LotteryDrawResultVO;
 import io.github.xiaocan.model.vo.LotteryTaskResultVO;
 import io.github.xiaocan.service.LotteryService;
 import io.github.xiaocan.service.UserService;
@@ -68,21 +70,9 @@ public class LotteryServiceImpl implements LotteryService {
 
     @Override
     public LotteryTaskResultVO runTask(Integer authId) {
-        UserEntity user = userService.getByCurrentRequest();
-        io.github.xiaocan.model.entity.LoginStateEntity entity = loginStateService.getEntity(authId);
-        if (entity == null || !entity.getUserId().equals(user.getId())) {
-            throw new BusinessException("无权操作该登录态");
-        }
-        LotteryAuth auth = LotteryAuth.builder()
-                .silkId(entity.getSilkId())
-                .userVayne(entity.getUserVayne())
-                .sessionId(entity.getSessionId())
-                .sivir(entity.getSivir())
-                .cityCode(entity.getCityCode())
-                .build();
-        if (!auth.isComplete()) {
-            throw new BusinessException("登录态不完整：silk_id 或 X-Session-Id 或 X-Sivir 缺失");
-        }
+        AuthBundle bundle = resolveAuth(authId);
+        LoginStateEntity entity = bundle.entity;
+        LotteryAuth auth = bundle.auth;
 
         LotteryTaskResultVO vo = new LotteryTaskResultVO();
         vo.setAuthName(entity.getName());
@@ -180,6 +170,107 @@ public class LotteryServiceImpl implements LotteryService {
             vo.setError(friendlyMsg(e.getMessage(), -1));
         }
         return vo;
+    }
+
+    /** 防御性循环硬上限：防止上游 lottery_count 异常值导致死循环 */
+    private static final int DRAW_HARD_CAP = 50;
+
+    @Override
+    public LotteryDrawResultVO draw(Integer authId) {
+        AuthBundle bundle = resolveAuth(authId);
+        LoginStateEntity entity = bundle.entity;
+        LotteryAuth auth = bundle.auth;
+
+        LotteryDrawResultVO vo = new LotteryDrawResultVO();
+        vo.setAuthName(entity.getName());
+        List<LotteryDrawResultVO.DrawItem> prizes = new ArrayList<>();
+        vo.setPrizes(prizes);
+
+        // 开前快照：失败 beforeCount=null，不影响抽奖循环（N 取 0）
+        Integer before = null;
+        try {
+            before = getLotteryCount(lotteryHttp.getLotteryProgress(auth));
+        } catch (Exception e) {
+            log.warn("开红包前 getLotteryProgress 失败（不影响抽奖）: {}", e.getMessage());
+        }
+        vo.setBeforeCount(before);
+        int n = before == null ? 0 : Math.min(before, DRAW_HARD_CAP);
+
+        for (int i = 0; i < n; i++) {
+            try {
+                JSONObject r = lotteryHttp.lottery(auth);
+                int code = codeOf(r);
+                if (code == 0) {
+                    JSONObject p = r == null ? null : r.getJSONObject("prize");
+                    prizes.add(toDrawItem(p, true, null));
+                } else {
+                    String msg = friendlyMsg(msgOf(r), code);
+                    prizes.add(toDrawItem(null, false, msg));
+                    vo.setError("第" + (i + 1) + "次抽奖失败: " + msg);
+                    break;
+                }
+            } catch (Exception e) {
+                String msg = friendlyMsg(e.getMessage(), -1);
+                prizes.add(toDrawItem(null, false, msg));
+                vo.setError("第" + (i + 1) + "次抽奖异常: " + e.getMessage());
+                log.warn("lottery 第{}次异常: {}", i + 1, e.getMessage());
+                break;
+            }
+        }
+
+        // 开后快照：失败 afterCount=null
+        try {
+            vo.setAfterCount(getLotteryCount(lotteryHttp.getLotteryProgress(auth)));
+        } catch (Exception e) {
+            log.warn("开红包后 getLotteryProgress 失败（不影响明细）: {}", e.getMessage());
+        }
+        return vo;
+    }
+
+    /**
+     * 鉴权 + 构造 LotteryAuth（runTask / draw 共用）。
+     *
+     * @param authId 登录态 id
+     * @return 归属校验通过的 entity + 完整性校验通过的 auth
+     */
+    private AuthBundle resolveAuth(Integer authId) {
+        UserEntity user = userService.getByCurrentRequest();
+        LoginStateEntity entity = loginStateService.getEntity(authId);
+        if (entity == null || !entity.getUserId().equals(user.getId())) {
+            throw new BusinessException("无权操作该登录态");
+        }
+        LotteryAuth auth = LotteryAuth.builder()
+                .silkId(entity.getSilkId())
+                .userVayne(entity.getUserVayne())
+                .sessionId(entity.getSessionId())
+                .sivir(entity.getSivir())
+                .cityCode(entity.getCityCode())
+                .build();
+        if (!auth.isComplete()) {
+            throw new BusinessException("登录态不完整：silk_id 或 X-Session-Id 或 X-Sivir 缺失");
+        }
+        return new AuthBundle(entity, auth);
+    }
+
+    /** resolveAuth 返回包，避免多返回值 */
+    private record AuthBundle(LoginStateEntity entity, LotteryAuth auth) {
+    }
+
+    /**
+     * 把 lottery 响应 prize 转成 DrawItem（prize 为 null 时字段留空，用于失败条目）。
+     */
+    private LotteryDrawResultVO.DrawItem toDrawItem(JSONObject prize, boolean ok, String msg) {
+        LotteryDrawResultVO.DrawItem item = new LotteryDrawResultVO.DrawItem();
+        item.setOk(ok);
+        item.setMsg(msg);
+        if (prize != null) {
+            item.setName(prize.getString("name"));
+            item.setIcon(prize.getString("icon"));
+            item.setFirstType(prize.getInteger("first_type"));
+            item.setSecondType(prize.getInteger("second_type"));
+            item.setCardId(prize.getInteger("card_id"));
+        }
+        return item;
     }
 
     private Integer getLotteryCount(JSONObject progress) {
