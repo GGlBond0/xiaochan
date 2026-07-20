@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 25
+- **Total Sessions**: 26
 - **Last Active**: 2026-07-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~882 | Active |
+| `journal-1.md` | ~919 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-07-20 | 全面审查收尾+P1/P2修复上线 | `60e866d`, `f37072a`, `61a38b9`, `49f537b`, `ceb93aa` | `main` |
 | 25 | 2026-07-20 | XiaoChanServiceImpl NPE+配置类事务(B-4/6/7) | `5b346aa95328860b1b66f993847197b815ba78cb` | `main` |
 | 24 | 2026-07-20 | 推送顺序+markConsumed可观测(A-4/A-5) | `b89257f3909dde6f26a614fdcea3f722fe7b3cbd` | `main` |
 | 23 | 2026-07-20 | XiaochanHttp NPE防御+MonitoryConfig事务 | `48aa49afcfdb1486d1047004f3c38f0366459670` | `main` |

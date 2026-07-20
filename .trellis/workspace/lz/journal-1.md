@@ -880,3 +880,40 @@ B-4:XiaoChanServiceImpl distance null用nullsLast+name null防御(3处)。B-6:Pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: 全面审查收尾+P1/P2修复上线
+
+**Date**: 2026-07-20
+**Task**: 全面审查收尾+P1/P2修复上线
+**Branch**: `main`
+
+### Summary
+
+三维度只读全面审查(生产健康+代码质量+功能完整性)产出audit-findings汇总,无P0。修复7个P1+3个P2并5次部署上线:XiaochanHttp NPE防御/MonitoryConfig事务+afterCommit/推送顺序改先推后写历史/markConsumed可观测/STORE_ACTIVITY去命中即停/死代码清理/XiaoChanServiceImpl NPE+配置类事务。核实后不改4项(A-7前端已正确显示/A-9自用私有仓库/B-5需sendMessage返回值重构/B-9 silkId类型约束保护)。每轮已分别记journal,此条为收尾汇总。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `60e866d` | (see git log) |
+| `f37072a` | (see git log) |
+| `61a38b9` | (see git log) |
+| `49f537b` | (see git log) |
+| `ceb93aa` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
