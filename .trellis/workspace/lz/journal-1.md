@@ -917,3 +917,36 @@ B-4:XiaoChanServiceImpl distance null用nullsLast+name null防御(3处)。B-6:Pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: 霸王餐新增看视频/看商城/领累计阶梯奖任务
+
+**Date**: 2026-07-21
+**Task**: 霸王餐新增看视频/看商城/领累计阶梯奖任务
+**Branch**: `main`
+
+### Summary
+
+逆向补抓(HAR+H5源码)确认看视频/看商城走OnAdViewed(bus_type=2/4,带HMAC-SHA256 sign密钥lcjkbqadfrzsewxy,实测两样本MATCH)、领阶梯奖走ReceiveExtraLottery(step=1/2,40043=已领)。LotteryHttp加onAdViewed/receiveExtraLottery,LotteryServiceImpl.runTask新增4任务(共9个),friendlyMsg加40043。推翻原'纯接口刷不到'判定。本地mvn构建+部署(md5校验),线上验证9项明细正常:看视频/看商城成功,阶梯奖已完成态SKIPPED。前端零改动。spec+记忆更新。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b11cb2` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
